@@ -49,3 +49,4 @@ output/
 
 # Docker
 .docker/
+.github/workflows/
