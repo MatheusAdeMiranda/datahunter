@@ -13,7 +13,6 @@ build/
 # Virtual env / uv
 .venv/
 .uv/
-uv.lock
 
 # Environment
 .env
