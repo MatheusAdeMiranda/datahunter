@@ -2,9 +2,13 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   pull_request:
-    branches: [main]
+    branches: [main, master]
+
+defaults:
+  run:
+    working-directory: datahunter
 
 jobs:
   lint:
@@ -26,7 +30,7 @@ jobs:
       - uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
-      - run: uv run mypy scraper/ --strict
+      - run: uv run python -m mypy scraper/ --strict
 
   test:
     name: Tests (Python ${{ matrix.python-version }})
@@ -40,4 +44,4 @@ jobs:
         with:
           enable-cache: true
           python-version: ${{ matrix.python-version }}
-      - run: uv run pytest scraper/tests/ worker/tests/ --cov=scraper --cov=worker --cov-report=term-missing -q
+      - run: uv run python -m pytest scraper/tests/ worker/tests/ --cov=scraper --cov=worker --cov-report=term-missing -q
