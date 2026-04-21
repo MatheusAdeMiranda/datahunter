@@ -7,14 +7,17 @@ from typing import Any, cast
 
 # MappingProxyType makes this truly read-only: any attempt to mutate it raises
 # TypeError at runtime, so callers cannot corrupt future build_headers() calls.
-_DEFAULT_HEADERS: MappingProxyType[str, str] = MappingProxyType({
-    "User-Agent": "datahunter/0.1",
-    "Accept-Encoding": "gzip",
-    "Accept": "text/html,application/xhtml+xml",
-})
+_DEFAULT_HEADERS: MappingProxyType[str, str] = MappingProxyType(
+    {
+        "User-Agent": "datahunter/0.1",
+        "Accept-Encoding": "gzip",
+        "Accept": "text/html,application/xhtml+xml",
+    }
+)
 
 
 # ── Mutability ────────────────────────────────────────────────────────────────
+
 
 def build_headers(extra: dict[str, str] | None = None) -> dict[str, str]:
     """Return a fresh headers dict merged with any caller-supplied extras."""
@@ -37,8 +40,10 @@ def merge_settings(
 
 # ── Closures ──────────────────────────────────────────────────────────────────
 
+
 def make_url_normalizer(base_url: str) -> Callable[[str], str]:
     """Return a closure that resolves relative paths against a fixed base URL."""
+
     def normalize(path: str) -> str:
         if path.startswith("http"):
             return path
@@ -60,6 +65,7 @@ def make_request_counter() -> Callable[[], int]:
 
 
 # ── Generators vs list comprehensions ────────────────────────────────────────
+
 
 def extract_links_eager(pages: list[str]) -> list[str]:
     """Return all links from all pages as a list (materialises everything in memory)."""

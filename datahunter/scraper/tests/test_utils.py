@@ -21,6 +21,7 @@ _PAGES = [
 
 # ── build_headers ─────────────────────────────────────────────────────────────
 
+
 class TestBuildHeaders:
     def test_includes_user_agent(self) -> None:
         assert "datahunter" in build_headers()["User-Agent"]
@@ -47,6 +48,7 @@ class TestBuildHeaders:
 
 # ── merge_settings ────────────────────────────────────────────────────────────
 
+
 class TestMergeSettings:
     def test_override_is_applied(self) -> None:
         result = merge_settings({"timeout": 10}, {"timeout": 30})
@@ -65,6 +67,7 @@ class TestMergeSettings:
 
 
 # ── make_url_normalizer ───────────────────────────────────────────────────────
+
 
 class TestMakeUrlNormalizer:
     def test_relative_path_gets_base_url(self) -> None:
@@ -91,6 +94,7 @@ class TestMakeUrlNormalizer:
 
 # ── make_request_counter ──────────────────────────────────────────────────────
 
+
 class TestMakeRequestCounter:
     def test_increments_on_each_call(self) -> None:
         counter = make_request_counter()
@@ -110,6 +114,7 @@ class TestMakeRequestCounter:
 
 
 # ── extract_links ─────────────────────────────────────────────────────────────
+
 
 class TestExtractLinks:
     def test_eager_returns_all_links(self) -> None:
@@ -132,6 +137,7 @@ class TestExtractLinks:
 
 
 # ── chunk_urls ────────────────────────────────────────────────────────────────
+
 
 class TestChunkUrls:
     def test_splits_into_correct_batches(self) -> None:
