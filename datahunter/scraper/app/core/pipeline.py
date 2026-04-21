@@ -28,11 +28,7 @@ def _parse_items(html: str, source_url: str) -> list[ScrapedItem]:
 
 
 class PageIterator:
-    """Iterate pages of a paginated site lazily using __iter__ / __next__.
-
-    Each __next__ call fetches exactly one page — nothing is pre-loaded.
-    Stops when fetch_fn returns empty HTML or max_pages is reached.
-    """
+    """Fetch pages one at a time via __next__ — nothing is pre-loaded."""
 
     def __init__(self, base_url: str, fetch_fn: FetchFn, max_pages: int = 50) -> None:
         self._base_url = base_url
@@ -117,9 +113,5 @@ def take(items: Iterable[ScrapedItem], n: int) -> Generator[ScrapedItem, None, N
 
 
 def make_take(n: int) -> Callable[[Iterable[ScrapedItem]], Generator[ScrapedItem, None, None]]:
-    """Return a take() step pre-configured with n via functools.partial.
-
-    Why partial: lets callers build reusable pipeline pieces without repeating
-    arguments. `take_five = make_take(5)` works as a drop-in pipeline step.
-    """
+    """Return a take() pre-configured with n via functools.partial."""
     return functools.partial(take, n=n)

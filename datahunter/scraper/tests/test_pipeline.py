@@ -1,4 +1,5 @@
 import sys
+from collections.abc import Callable
 
 from scraper.app.core.entities import ScrapedItem
 from scraper.app.core.pipeline import (
@@ -26,18 +27,13 @@ def _html(n: int) -> str:
     return f"<html>{items}</html>"
 
 
-def _make_fetch(pages: dict[str, str]) -> object:
+def _make_fetch(pages: dict[str, str]) -> Callable[[str], str]:
     """Return a fetch_fn that serves pages from a dict, empty string otherwise."""
 
     def fetch(url: str) -> str:
         return pages.get(url, "")
 
     return fetch
-
-
-def _single_page_fetch(html: str) -> object:
-    """Return a fetch_fn that always returns the same HTML for page-1."""
-    return _make_fetch({f"{BASE_URL}/page-1.html": html})
 
 
 # ── PageIterator ──────────────────────────────────────────────────────────────
@@ -49,26 +45,26 @@ class TestPageIterator:
             f"{BASE_URL}/page-1.html": "<html>p1</html>",
             f"{BASE_URL}/page-2.html": "<html>p2</html>",
         }
-        result = list(PageIterator(BASE_URL, _make_fetch(pages)))  # type: ignore[arg-type]
+        result = list(PageIterator(BASE_URL, _make_fetch(pages)))
         assert result == ["<html>p1</html>", "<html>p2</html>"]
 
     def test_stops_when_fetch_returns_empty(self) -> None:
         pages = {f"{BASE_URL}/page-1.html": "<html>p1</html>"}
-        result = list(PageIterator(BASE_URL, _make_fetch(pages)))  # type: ignore[arg-type]
+        result = list(PageIterator(BASE_URL, _make_fetch(pages)))
         assert len(result) == 1
 
     def test_stops_at_max_pages(self) -> None:
         # All pages available but max_pages=2 must limit to 2.
         pages = {f"{BASE_URL}/page-{i}.html": f"<html>p{i}</html>" for i in range(1, 10)}
-        result = list(PageIterator(BASE_URL, _make_fetch(pages), max_pages=2))  # type: ignore[arg-type]
+        result = list(PageIterator(BASE_URL, _make_fetch(pages), max_pages=2))
         assert len(result) == 2
 
     def test_implements_iterator_protocol(self) -> None:
-        it = PageIterator(BASE_URL, _make_fetch({}))  # type: ignore[arg-type]
+        it = PageIterator(BASE_URL, _make_fetch({}))
         assert iter(it) is it  # __iter__ returns self
 
     def test_repr_is_readable(self) -> None:
-        it = PageIterator(BASE_URL, _make_fetch({}))  # type: ignore[arg-type]
+        it = PageIterator(BASE_URL, _make_fetch({}))
         assert BASE_URL in repr(it)
         assert "PageIterator" in repr(it)
 
@@ -153,19 +149,19 @@ class TestNormalize:
 class TestRunPipeline:
     def test_end_to_end_collects_and_cleans_items(self) -> None:
         fetch = _make_fetch({f"{BASE_URL}/page-1.html": _html(3)})
-        items = list(run_pipeline(BASE_URL, fetch, max_pages=1))  # type: ignore[arg-type]
+        items = list(run_pipeline(BASE_URL, fetch, max_pages=1))
         assert len(items) == 3
         assert items[0].data["title"] == "Book 1"  # whitespace stripped
 
     def test_pipeline_is_a_generator(self) -> None:
         fetch = _make_fetch({})
-        result = run_pipeline(BASE_URL, fetch)  # type: ignore[arg-type]
+        result = run_pipeline(BASE_URL, fetch)
         assert hasattr(result, "__next__")
 
     def test_pipeline_uses_less_memory_than_list(self) -> None:
         pages = {f"{BASE_URL}/page-{i}.html": _html(10) for i in range(1, 11)}
-        gen = run_pipeline(BASE_URL, _make_fetch(pages), max_pages=10)  # type: ignore[arg-type]
-        lst = list(run_pipeline(BASE_URL, _make_fetch(pages), max_pages=10))  # type: ignore[arg-type]
+        gen = run_pipeline(BASE_URL, _make_fetch(pages), max_pages=10)
+        lst = list(run_pipeline(BASE_URL, _make_fetch(pages), max_pages=10))
         # Generator object is a fixed ~120 bytes; materialised list is much larger.
         assert sys.getsizeof(gen) < sys.getsizeof(lst)
 
@@ -174,7 +170,7 @@ class TestRunPipeline:
             f"{BASE_URL}/page-1.html": _html(2),
             f"{BASE_URL}/page-2.html": _html(2),
         }
-        items = list(run_pipeline(BASE_URL, _make_fetch(pages), max_pages=5))  # type: ignore[arg-type]
+        items = list(run_pipeline(BASE_URL, _make_fetch(pages), max_pages=5))
         assert len(items) == 4
 
 
