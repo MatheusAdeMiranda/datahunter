@@ -10,11 +10,7 @@ def _utcnow() -> datetime:
 
 @dataclass(frozen=True)
 class ScrapingJob:
-    """Immutable description of what to scrape.
-
-    frozen=True: a job must not change after creation — if settings need to
-    differ, create a new job. This makes jobs safe to pass across threads.
-    """
+    """Immutable description of what to scrape (frozen=True makes it thread-safe)."""
 
     url: str
     max_pages: int = 50
@@ -33,11 +29,7 @@ class ScrapingJob:
 
 @dataclass
 class ScrapedItem:
-    """A single item extracted during a scrape.
-
-    Mutable so that normalisation steps (strip whitespace, cast types) can
-    update fields in place as the item moves through the pipeline.
-    """
+    """A single item extracted during a scrape — mutable so pipeline steps can normalise fields."""
 
     url: str
     data: dict[str, str]

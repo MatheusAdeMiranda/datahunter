@@ -90,6 +90,13 @@ class TestScrapedItem:
         item.data["title"] = item.data["title"].strip()
         assert item.data["title"] == "spaces"
 
+    def test_eq_with_non_item_returns_not_implemented(self) -> None:
+        item = ScrapedItem(url="https://x.com/1", data={"title": "A"})
+        # NotImplemented lets Python try the reflected operation instead of
+        # silently returning False, which would break mixed-type comparisons.
+        assert item.__eq__("not an item") is NotImplemented
+        assert item.__eq__(42) is NotImplemented
+
 
 # ── ScrapingResult ────────────────────────────────────────────────────────────
 

@@ -2,11 +2,7 @@ from __future__ import annotations
 
 
 class ScrapingError(Exception):
-    """Base for all datahunter errors.
-
-    Catching ScrapingError lets callers handle any scraping failure without
-    coupling to specific libraries (httpx, sqlalchemy, bs4, etc.).
-    """
+    """Base for all datahunter errors — catch this to avoid coupling to specific libraries."""
 
 
 class NetworkError(ScrapingError):
