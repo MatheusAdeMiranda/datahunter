@@ -52,6 +52,7 @@ strict = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["scraper/tests", "worker/tests"]
+pythonpath = ["."]
 
 [tool.coverage.run]
 source = ["scraper", "worker"]
