@@ -1,6 +1,9 @@
 import sys
 
+import pytest
+
 from scraper.app.core.utils import (
+    _DEFAULT_HEADERS,
     build_headers,
     chunk_urls,
     extract_links_eager,
@@ -36,6 +39,10 @@ class TestBuildHeaders:
 
     def test_extra_none_returns_defaults(self) -> None:
         assert build_headers() == build_headers(None)
+
+    def test_default_headers_constant_is_immutable(self) -> None:
+        with pytest.raises(TypeError):
+            _DEFAULT_HEADERS["X-Inject"] = "attack"  # type: ignore[index]
 
 
 # ── merge_settings ────────────────────────────────────────────────────────────

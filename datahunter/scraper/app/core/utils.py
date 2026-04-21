@@ -2,24 +2,22 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Generator, Iterable
-from typing import Any
+from types import MappingProxyType
+from typing import Any, cast
 
-# Module-level constant avoids the mutable-default-argument trap entirely.
-_DEFAULT_HEADERS: dict[str, str] = {
+# MappingProxyType makes this truly read-only: any attempt to mutate it raises
+# TypeError at runtime, so callers cannot corrupt future build_headers() calls.
+_DEFAULT_HEADERS: MappingProxyType[str, str] = MappingProxyType({
     "User-Agent": "datahunter/0.1",
     "Accept-Encoding": "gzip",
     "Accept": "text/html,application/xhtml+xml",
-}
+})
 
 
 # ── Mutability ────────────────────────────────────────────────────────────────
 
 def build_headers(extra: dict[str, str] | None = None) -> dict[str, str]:
-    """Return a fresh headers dict, optionally merged with caller-supplied extras.
-
-    Why: using `def f(extra={})` shares the same dict across every call.
-    A caller adding a key would silently corrupt all future calls.
-    """
+    """Return a fresh headers dict merged with any caller-supplied extras."""
     base = dict(_DEFAULT_HEADERS)
     if extra:
         base.update(extra)
@@ -40,11 +38,7 @@ def merge_settings(
 # ── Closures ──────────────────────────────────────────────────────────────────
 
 def make_url_normalizer(base_url: str) -> Callable[[str], str]:
-    """Return a closure that resolves relative paths against base_url.
-
-    Useful when a spider is scoped to one domain: the base URL is captured
-    once and reused across thousands of calls without being passed every time.
-    """
+    """Return a closure that resolves relative paths against a fixed base URL."""
     def normalize(path: str) -> str:
         if path.startswith("http"):
             return path
@@ -54,11 +48,7 @@ def make_url_normalizer(base_url: str) -> Callable[[str], str]:
 
 
 def make_request_counter() -> Callable[[], int]:
-    """Return a closure that tracks how many requests have been made.
-
-    Each call to make_request_counter() creates an independent counter,
-    so two spiders running in the same process never share state.
-    """
+    """Return a closure that increments and returns an independent call count."""
     count = 0
 
     def increment() -> int:
@@ -72,33 +62,22 @@ def make_request_counter() -> Callable[[], int]:
 # ── Generators vs list comprehensions ────────────────────────────────────────
 
 def extract_links_eager(pages: list[str]) -> list[str]:
-    """Return ALL links from all pages as a list.
-
-    Simple and readable, but materialises the entire result in memory.
-    Fine for small crawls; avoid when pages can be in the thousands.
-    """
+    """Return all links from all pages as a list (materialises everything in memory)."""
     return [link for page in pages for link in _parse_links(page)]
 
 
 def extract_links_lazy(pages: Iterable[str]) -> Generator[str, None, None]:
-    """Yield links one at a time without holding the full result in memory.
-
-    The caller controls how many items are consumed at once, which is what
-    makes pipeline composition (`fetch | parse | store`) memory-safe.
-    """
+    """Yield links one at a time — memory-safe for arbitrarily large crawls."""
     for page in pages:
         yield from _parse_links(page)
 
 
 def chunk_urls(urls: list[str], size: int) -> Generator[list[str], None, None]:
-    """Yield successive batches of `size` URLs.
-
-    Useful for rate-controlled fetching: fetch one batch, wait, fetch next.
-    """
+    """Yield successive URL batches of `size` for rate-controlled fetching."""
     for i in range(0, len(urls), size):
         yield urls[i : i + size]
 
 
 def _parse_links(html: str) -> list[str]:
     """Extract href values from a raw HTML snippet (naive regex, for demos)."""
-    return [str(m) for m in re.findall(r'href="([^"]+)"', html)]
+    return cast(list[str], re.findall(r'href="([^"]+)"', html))
