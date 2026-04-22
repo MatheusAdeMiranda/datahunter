@@ -3,10 +3,22 @@ from __future__ import annotations
 import contextlib
 import logging
 from collections.abc import Generator, Mapping
+from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from types import TracebackType
+from typing import Any, Protocol
 
 logger = logging.getLogger(__name__)
+
+
+class Resource(Protocol):
+    """Structural interface for managed scraping resources.
+
+    Any class with is_open satisfies this — no inheritance needed.
+    That is the key difference between Protocol (structural) and ABC (nominal).
+    """
+
+    is_open: bool
 
 
 @dataclass
@@ -33,6 +45,19 @@ def managed_session(
     finally:
         session.is_open = False
         logger.debug("session closed for %s", url)
+
+
+@contextlib.contextmanager
+def open_resources(
+    *managers: AbstractContextManager[Any],
+) -> Generator[list[Any], None, None]:
+    """Open multiple context managers via ExitStack.
+
+    All resources are closed in LIFO order even if one of them raises —
+    ExitStack guarantees cleanup regardless of failure order.
+    """
+    with contextlib.ExitStack() as stack:
+        yield [stack.enter_context(m) for m in managers]
 
 
 class BrowserContext:

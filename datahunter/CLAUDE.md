@@ -56,6 +56,7 @@ Sistema de web scraping profissional para coleta e monitoramento de dados da web
 | `entities.py` | 3 | `ScrapingJob` (frozen dataclass), `ScrapedItem`, `ScrapingResult` |
 | `pipeline.py` | 4 | `PageIterator`, pipeline gerador, `itertools`, `functools.lru_cache` |
 | `decorators.py` | 5 | `@retry`, `@rate_limit` (sliding-window), `@log_execution` |
+| `contexts.py` | 6 | `Resource` (Protocol), `managed_session()` (@contextmanager), `BrowserContext` (__enter__/__exit__), `open_resources()` (ExitStack) |
 
 ## Decisoes
 - httpx no lugar de requests: suporte nativo a async
@@ -70,9 +71,10 @@ Sistema de web scraping profissional para coleta e monitoramento de dados da web
 ## Dividas Tecnicas
 (registrar aqui conforme aparecerem)
 
-## Proximo passo — Dia 6: Context Managers e Tipagem Estatica
+## Proximo passo — Dia 7: Git Profissional: Branches, PRs e CI Basico
 
 Entregas esperadas:
-- `scraper/app/core/contexts.py`: `managed_session()` (contextlib.contextmanager) e `BrowserContext` (classe com __enter__/__exit__)
-- `scraper/tests/test_contexts.py`
-- mypy --strict sem erros em todos os modulos da semana
+- fluxo Git documentado no `CLAUDE.md`
+- `.github/workflows/ci.yml` rodando `ruff`, `mypy` e `pytest` (ja existe, revisar e completar)
+- historico limpo com commits legiveis
+- primeira PR de cada feature mergeada com CI verde

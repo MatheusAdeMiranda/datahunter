@@ -1,8 +1,16 @@
+import contextlib
 import logging
+from typing import Any
 
 import pytest
 
-from scraper.app.core.contexts import BrowserContext, Session, managed_session
+from scraper.app.core.contexts import (
+    BrowserContext,
+    Resource,
+    Session,
+    managed_session,
+    open_resources,
+)
 
 # ── managed_session ───────────────────────────────────────────────────────────
 
@@ -143,3 +151,85 @@ class TestBrowserContext:
         ):
             pass
         assert "headless=False" in caplog.text
+
+
+# ── Resource Protocol ─────────────────────────────────────────────────────────
+
+
+class TestResourceProtocol:
+    def _accepts_resource(self, r: Resource) -> bool:
+        return r.is_open
+
+    def test_session_satisfies_protocol(self) -> None:
+        with managed_session("https://example.com") as s:
+            assert self._accepts_resource(s) is True
+
+    def test_browser_context_satisfies_protocol(self) -> None:
+        with BrowserContext() as b:
+            assert self._accepts_resource(b) is True
+
+    def test_protocol_is_structural_not_nominal(self) -> None:
+        # No inheritance from Resource — just having is_open is enough.
+        class Arbitrary:
+            is_open = True
+
+        assert self._accepts_resource(Arbitrary()) is True
+
+
+# ── open_resources (ExitStack) ────────────────────────────────────────────────
+
+
+class TestOpenResources:
+    def test_yields_entered_resources(self) -> None:
+        with open_resources(
+            managed_session("https://a.example.com"),
+            managed_session("https://b.example.com"),
+        ) as resources:
+            assert len(resources) == 2
+            assert all(r.is_open for r in resources)
+
+    def test_closes_all_on_normal_exit(self) -> None:
+        with open_resources(
+            managed_session("https://a.example.com"),
+            managed_session("https://b.example.com"),
+        ) as resources:
+            captured = list(resources)
+        assert all(not r.is_open for r in captured)
+
+    def test_closes_all_on_exception(self) -> None:
+        captured: list[Any] = []
+        with (
+            pytest.raises(ValueError),
+            open_resources(
+                managed_session("https://a.example.com"),
+                managed_session("https://b.example.com"),
+            ) as resources,
+        ):
+            captured.extend(resources)
+            raise ValueError("mid-flight")
+        assert all(not r.is_open for r in captured)
+
+    def test_mixes_different_resource_types(self) -> None:
+        with open_resources(
+            managed_session("https://example.com"),
+            BrowserContext(),
+        ) as resources:
+            session, browser = resources
+            assert session.is_open and browser.is_open
+
+    def test_empty_stack_yields_empty_list(self) -> None:
+        with open_resources() as resources:
+            assert resources == []
+
+
+# ── contextlib.suppress ───────────────────────────────────────────────────────
+
+
+class TestContextlibSuppress:
+    def test_suppress_silences_listed_exception(self) -> None:
+        with contextlib.suppress(ValueError):
+            raise ValueError("silenced")
+
+    def test_suppress_propagates_unlisted_exception(self) -> None:
+        with pytest.raises(TypeError), contextlib.suppress(ValueError):
+            raise TypeError("not suppressed")
