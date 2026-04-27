@@ -71,10 +71,10 @@ Sistema de web scraping profissional para coleta e monitoramento de dados da web
 ## Dividas Tecnicas
 (registrar aqui conforme aparecerem)
 
-## Proximo passo — Dia 7: Git Profissional: Branches, PRs e CI Basico
+## Proximo passo — Dia 8: HTTP na Pratica com httpx
 
 Entregas esperadas:
-- fluxo Git documentado no `CLAUDE.md`
-- `.github/workflows/ci.yml` rodando `ruff`, `mypy` e `pytest` (ja existe, revisar e completar)
-- historico limpo com commits legiveis
-- primeira PR de cada feature mergeada com CI verde
+- `scraper/app/core/http_client.py` — wrapper sobre `httpx.Client` com retry, timeout e logging
+- testes com `respx` (mock HTTP para httpx)
+- o client tem timeout configuravel, retry em 429/5xx, headers realistas por padrao
+- testes nao fazem requisicoes reais de rede
