@@ -59,6 +59,12 @@ Sistema de web scraping profissional para coleta e monitoramento de dados da web
 | `contexts.py` | 6 | `Resource` (Protocol), `managed_session()` (@contextmanager), `BrowserContext` (__enter__/__exit__), `open_resources()` (ExitStack) |
 | `http_client.py` | 8 | `HTTPClient` (httpx.Client wrapper), retry em 429/5xx, timeout configuravel, `NetworkError` em falhas de conexao |
 
+`scraper/app/parsers/` — todos com 100% de cobertura e mypy --strict passando:
+
+| Arquivo | Dia | O que tem |
+|---|---|---|
+| `html_parser.py` | 9 | `parse_catalog_page()` (CSS via BS4+lxml), `extract_available_titles_xpath()` (XPath com lxml.etree), `BookData` TypedDict, `ParseError` defensivo |
+
 ## Decisoes
 - httpx no lugar de requests: suporte nativo a async
 - Playwright no lugar de Selenium: API moderna e async
@@ -72,10 +78,10 @@ Sistema de web scraping profissional para coleta e monitoramento de dados da web
 ## Dividas Tecnicas
 (registrar aqui conforme aparecerem)
 
-## Proximo passo — Dia 9: Parsing com BeautifulSoup4 e lxml
+## Proximo passo — Dia 10: Primeira Spider com Paginacao
 
 Entregas esperadas:
-- `scraper/app/parsers/html_parser.py` com interface clara
-- parser de `books.toscrape.com` extraindo titulo, preco e disponibilidade
-- testes com HTML fixtures locais (sem requisicao real)
-- `ParseError` lancado quando estrutura nao e encontrada
+- `scraper/app/spiders/books_spider.py` — spider completa do `books.toscrape.com`
+- percorre todas as paginas sem loop infinito, com deduplicacao de URLs
+- salva resultado em JSON
+- testes com mock HTTP (respx) e fixtures HTML locais
