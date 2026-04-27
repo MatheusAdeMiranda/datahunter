@@ -88,7 +88,7 @@ def test_rating(catalog_html: str, index: int, expected_rating: str) -> None:
 
 
 def test_raises_when_no_articles() -> None:
-    with pytest.raises(ParseError, match="no article.product_pod"):
+    with pytest.raises(ParseError, match=r"no article\.product_pod"):
         parse_catalog_page("<html><body><p>nothing here</p></body></html>")
 
 
@@ -112,7 +112,7 @@ def test_raises_when_price_element_missing() -> None:
       <p class="star-rating Two"></p>
     </article>
     """
-    with pytest.raises(ParseError, match="p.price_color"):
+    with pytest.raises(ParseError, match=r"p\.price_color"):
         parse_catalog_page(html)
 
 
@@ -124,7 +124,7 @@ def test_raises_when_availability_element_missing() -> None:
       <p class="star-rating Two"></p>
     </article>
     """
-    with pytest.raises(ParseError, match="p.availability"):
+    with pytest.raises(ParseError, match=r"p\.availability"):
         parse_catalog_page(html)
 
 
@@ -136,7 +136,7 @@ def test_raises_when_rating_element_missing() -> None:
       <p class="availability">In stock</p>
     </article>
     """
-    with pytest.raises(ParseError, match="p.star-rating"):
+    with pytest.raises(ParseError, match=r"p\.star-rating"):
         parse_catalog_page(html)
 
 
