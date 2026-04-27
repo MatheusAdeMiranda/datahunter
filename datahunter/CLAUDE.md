@@ -57,6 +57,7 @@ Sistema de web scraping profissional para coleta e monitoramento de dados da web
 | `pipeline.py` | 4 | `PageIterator`, pipeline gerador, `itertools`, `functools.lru_cache` |
 | `decorators.py` | 5 | `@retry`, `@rate_limit` (sliding-window), `@log_execution` |
 | `contexts.py` | 6 | `Resource` (Protocol), `managed_session()` (@contextmanager), `BrowserContext` (__enter__/__exit__), `open_resources()` (ExitStack) |
+| `http_client.py` | 8 | `HTTPClient` (httpx.Client wrapper), retry em 429/5xx, timeout configuravel, `NetworkError` em falhas de conexao |
 
 ## Decisoes
 - httpx no lugar de requests: suporte nativo a async
@@ -71,10 +72,10 @@ Sistema de web scraping profissional para coleta e monitoramento de dados da web
 ## Dividas Tecnicas
 (registrar aqui conforme aparecerem)
 
-## Proximo passo — Dia 8: HTTP na Pratica com httpx
+## Proximo passo — Dia 9: Parsing com BeautifulSoup4 e lxml
 
 Entregas esperadas:
-- `scraper/app/core/http_client.py` — wrapper sobre `httpx.Client` com retry, timeout e logging
-- testes com `respx` (mock HTTP para httpx)
-- o client tem timeout configuravel, retry em 429/5xx, headers realistas por padrao
-- testes nao fazem requisicoes reais de rede
+- `scraper/app/parsers/html_parser.py` com interface clara
+- parser de `books.toscrape.com` extraindo titulo, preco e disponibilidade
+- testes com HTML fixtures locais (sem requisicao real)
+- `ParseError` lancado quando estrutura nao e encontrada
