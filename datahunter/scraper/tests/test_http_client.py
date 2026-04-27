@@ -67,7 +67,7 @@ def test_retries_on_retryable_status(status_code: int) -> None:
             httpx.Response(200, text="ok"),
         ]
     )
-    with HTTPClient(max_retries=3) as client:
+    with HTTPClient(max_attempts=3) as client:
         response = client.get(URL)
     assert response.status_code == 200
 
@@ -75,25 +75,42 @@ def test_retries_on_retryable_status(status_code: int) -> None:
 @respx.mock
 def test_raises_network_error_after_all_retries_exhausted() -> None:
     respx.get(URL).mock(return_value=httpx.Response(500))
-    with HTTPClient(max_retries=3) as client, pytest.raises(NetworkError, match="HTTP 500"):
+    with HTTPClient(max_attempts=3) as client, pytest.raises(NetworkError, match="HTTP 500"):
         client.get(URL)
 
 
 @respx.mock
 def test_exact_retry_count(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Verify that _fetch attempts exactly max_retries times, no more."""
+    """_fetch attempts exactly max_attempts times on retryable HTTP status."""
     calls: list[int] = []
 
     def fake_request(*_: object, **__: object) -> httpx.Response:
         calls.append(1)
         return httpx.Response(503)
 
-    with HTTPClient(max_retries=4) as client:
+    with HTTPClient(max_attempts=4) as client:
         monkeypatch.setattr(client._client, "request", fake_request)
         with pytest.raises(NetworkError):
             client.get(URL)
 
     assert len(calls) == 4
+
+
+@respx.mock
+def test_exact_retry_count_on_connection_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """_fetch attempts exactly max_attempts times on connection-level errors."""
+    calls: list[int] = []
+
+    def fake_request(*_: object, **__: object) -> httpx.Response:
+        calls.append(1)
+        raise httpx.TimeoutException("timed out")
+
+    with HTTPClient(max_attempts=3) as client:
+        monkeypatch.setattr(client._client, "request", fake_request)
+        with pytest.raises(NetworkError):
+            client.get(URL)
+
+    assert len(calls) == 3
 
 
 # ── Connection-level errors ───────────────────────────────────────────────────
@@ -102,7 +119,7 @@ def test_exact_retry_count(monkeypatch: pytest.MonkeyPatch) -> None:
 @respx.mock
 def test_timeout_raises_network_error() -> None:
     respx.get(URL).mock(side_effect=httpx.TimeoutException("timed out"))
-    with HTTPClient(max_retries=1) as client, pytest.raises(NetworkError, match="timed out"):
+    with HTTPClient(max_attempts=1) as client, pytest.raises(NetworkError, match="timed out"):
         client.get(URL)
 
 
@@ -110,7 +127,7 @@ def test_timeout_raises_network_error() -> None:
 def test_connect_error_raises_network_error() -> None:
     respx.get(URL).mock(side_effect=httpx.ConnectError("refused"))
     with (
-        HTTPClient(max_retries=1) as client,
+        HTTPClient(max_attempts=1) as client,
         pytest.raises(NetworkError, match="connection failed"),
     ):
         client.get(URL)
@@ -119,7 +136,7 @@ def test_connect_error_raises_network_error() -> None:
 @respx.mock
 def test_network_error_wraps_original_exception() -> None:
     respx.get(URL).mock(side_effect=httpx.TimeoutException("bang"))
-    with HTTPClient(max_retries=1) as client, pytest.raises(NetworkError) as exc_info:
+    with HTTPClient(max_attempts=1) as client, pytest.raises(NetworkError) as exc_info:
         client.get(URL)
     assert isinstance(exc_info.value.__cause__, httpx.TimeoutException)
 
@@ -131,7 +148,7 @@ def test_network_error_wraps_original_exception() -> None:
 @respx.mock
 def test_non_retryable_4xx_returned_as_is(status_code: int) -> None:
     respx.get(URL).mock(return_value=httpx.Response(status_code))
-    with HTTPClient(max_retries=3) as client:
+    with HTTPClient(max_attempts=3) as client:
         response = client.get(URL)
     assert response.status_code == status_code
 
