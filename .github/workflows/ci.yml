@@ -19,6 +19,8 @@ jobs:
       - uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
+          python-version: "3.12"
+      - run: uv sync --frozen
       - run: uv run ruff check .
       - run: uv run ruff format --check .
 
@@ -30,6 +32,8 @@ jobs:
       - uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
+          python-version: "3.12"
+      - run: uv sync --frozen
       - run: uv run python -m mypy scraper/ --strict
 
   test:
@@ -44,4 +48,5 @@ jobs:
         with:
           enable-cache: true
           python-version: ${{ matrix.python-version }}
+      - run: uv sync --frozen
       - run: uv run python -m pytest scraper/tests/ worker/tests/ --cov=scraper --cov=worker --cov-report=term-missing -q
