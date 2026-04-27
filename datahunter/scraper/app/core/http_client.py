@@ -28,10 +28,10 @@ class HTTPClient:
         self,
         *,
         timeout: float = 10.0,
-        max_retries: int = 3,
+        max_attempts: int = 3,
         headers: dict[str, str] | None = None,
     ) -> None:
-        self._max_retries = max_retries
+        self._max_attempts = max_attempts
         self._client = httpx.Client(
             headers=build_headers(headers),
             timeout=timeout,
@@ -46,7 +46,7 @@ class HTTPClient:
 
     def _fetch(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
         last_exc: NetworkError | None = None
-        for attempt in range(1, self._max_retries + 1):
+        for attempt in range(1, self._max_attempts + 1):
             try:
                 response = self._client.request(method, url, **kwargs)
             except httpx.TimeoutException as err:
@@ -64,13 +64,14 @@ class HTTPClient:
             logger.warning(
                 "attempt %d/%d failed for %s %s: %s",
                 attempt,
-                self._max_retries,
+                self._max_attempts,
                 method,
                 url,
                 last_exc,
             )
 
-        raise last_exc or NetworkError(f"{method} {url}: all retries exhausted")
+        assert last_exc is not None
+        raise last_exc
 
     def close(self) -> None:
         self._client.close()
