@@ -69,7 +69,20 @@ Sistema de web scraping profissional para coleta e monitoramento de dados da web
 
 | Arquivo | Dia | O que tem |
 |---|---|---|
-| `books_spider.py` | 10 | `BooksSpider` (paginacao completa, deduplicacao por `set[str]`, salva JSON), `_save_json()`, entrypoint `__main__` |
+| `books_spider.py` | 10–11 | `BooksSpider` (paginacao completa, deduplicacao por `set[str]`, JSON e/ou DB), `_save_json()`, entrypoint `__main__` |
+
+`scraper/app/storage/` — todos com mypy --strict passando:
+
+| Arquivo | Dia | O que tem |
+|---|---|---|
+| `models.py` | 11 | `Base` (DeclarativeBase), `ScrapedBook` (PK=title, Mapped/mapped_column) |
+| `service.py` | 11 | `StorageService` — `save_items()` upsert via `session.merge()`, `count()`, `init_db()` |
+
+`alembic/` — migrations com Alembic:
+
+| Arquivo | Dia | O que tem |
+|---|---|---|
+| `versions/0001_create_scraped_books.py` | 11 | cria tabela `scraped_books` com PK em `title` |
 
 ## Decisoes
 - httpx no lugar de requests: suporte nativo a async
@@ -79,21 +92,26 @@ Sistema de web scraping profissional para coleta e monitoramento de dados da web
 - `ParseError` em pagina nao interrompe paginacao: erro e logado e a spider segue para o proximo link
 - `NetworkError` interrompe a paginacao: erro de rede provavelmente afeta as paginas seguintes tambem
 - `cast(dict[str, str], book)` no lugar de `dict(book)`: TypedDict tem `__getitem__` com retorno `object` no mypy strict; cast e seguro porque TypedDict e um dict em runtime
+- banco: SQLite para dev, PostgreSQL para prod (Dia 25, Docker Compose)
+- `title` como PK de `ScrapedBook`: identificador natural no books.toscrape.com; permite `session.merge()` sem coluna auxiliar de unicidade
+- `session.merge()` para upsert: funciona em SQLite e PostgreSQL sem codigo dialect-specific; custo e um SELECT extra por item, aceitavel no volume atual
+- `StorageService` injetado no spider via parametro opcional: testes do Dia 10 nao quebram (passam `storage=None`)
+- `StorageService` importado via `TYPE_CHECKING` no spider: evita importacao circular em runtime caso o modulo de storage importe algo do spider no futuro
 
 ## Decisoes Abertas
-- banco local: SQLite para dev, PostgreSQL para prod (decidir no Dia 11)
 - framework de API para gerenciar jobs: a definir na Semana 4
+- upsert dialect-specific (`INSERT ... ON CONFLICT DO UPDATE`) para PostgreSQL: avaliar no Dia 19+ (async)
 
 ## Dividas Tecnicas
 (registrar aqui conforme aparecerem)
 
-## Proximo passo — Dia 11: Armazenamento com SQLAlchemy
+## Proximo passo — Dia 12: Robustez (Retry, Rate Limiting e Tratamento de Erro)
 
 Entregas esperadas:
-- modelo `ScrapedBook` com SQLAlchemy 2.0 (`Mapped`, `mapped_column`)
-- `StorageService` com upsert (inserir ou atualizar sem duplicar)
-- migration inicial com Alembic
-- spider do Dia 10 salva no banco em vez de JSON
+- backoff exponencial no `@retry`
+- rate limiter por dominio no `HTTPClient`
+- spider nao para em erro de item isolado
+- verificacao de `robots.txt` antes de scraper
 - testes com SQLite em memoria
 - salva resultado em JSON
 - testes com mock HTTP (respx) e fixtures HTML locais
