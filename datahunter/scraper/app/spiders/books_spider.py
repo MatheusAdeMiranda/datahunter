@@ -3,12 +3,15 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from scraper.app.core.entities import ScrapedItem, ScrapingJob, ScrapingResult
 from scraper.app.core.exceptions import NetworkError, ParseError
 from scraper.app.core.http_client import HTTPClient
 from scraper.app.parsers.html_parser import extract_next_page_url, parse_catalog_page
+
+if TYPE_CHECKING:
+    from scraper.app.storage.service import StorageService
 
 logger = logging.getLogger(__name__)
 
@@ -31,11 +34,13 @@ class BooksSpider:
         base_url: str = _DEFAULT_BASE_URL,
         max_pages: int = 50,
         output_path: Path | None = _DEFAULT_OUTPUT,
+        storage: StorageService | None = None,
     ) -> None:
         self._client = client
         self._base_url = base_url
         self._max_pages = max_pages
         self._output_path = output_path
+        self._storage = storage
 
     def crawl(self) -> ScrapingResult:
         job = ScrapingJob(url=self._base_url, max_pages=self._max_pages)
@@ -80,6 +85,9 @@ class BooksSpider:
         if self._output_path is not None:
             _save_json(result, self._output_path)
 
+        if self._storage is not None:
+            self._storage.save_items(result.items)
+
         return result
 
 
@@ -94,8 +102,15 @@ def _save_json(result: ScrapingResult, path: Path) -> None:
 
 
 if __name__ == "__main__":
+    from sqlalchemy import create_engine
+
+    from scraper.app.storage.service import StorageService
+
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s — %(message)s")
+    _engine = create_engine("sqlite:///datahunter.db")
+    _storage = StorageService(_engine)
+    _storage.init_db()
     with HTTPClient() as client:
-        spider = BooksSpider(client)
+        spider = BooksSpider(client, output_path=None, storage=_storage)
         result = spider.crawl()
         print(f"done: {len(result)} items, {len(result.errors)} errors")

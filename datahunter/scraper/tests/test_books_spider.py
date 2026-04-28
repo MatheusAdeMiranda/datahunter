@@ -186,3 +186,25 @@ def test_items_contain_expected_book_fields() -> None:
     assert "Tipping the Velvet" in titles
     assert "Soumission" in titles
     assert "Sharp Objects" in titles
+
+
+@respx.mock
+def test_crawl_saves_items_to_storage() -> None:
+    from sqlalchemy import create_engine
+
+    from scraper.app.storage.models import Base
+    from scraper.app.storage.service import StorageService
+
+    respx.get(PAGE1_URL).mock(return_value=httpx.Response(200, text=_page("books_page1.html")))
+    respx.get(PAGE2_URL).mock(return_value=httpx.Response(200, text=_page("books_page2.html")))
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    storage = StorageService(engine)
+
+    with HTTPClient() as client:
+        result = BooksSpider(client, base_url=PAGE1_URL, output_path=None, storage=storage).crawl()
+
+    assert len(result) == 4
+    assert storage.count() == 4
+    engine.dispose()
