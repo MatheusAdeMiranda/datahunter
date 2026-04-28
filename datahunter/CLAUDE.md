@@ -59,17 +59,26 @@ Sistema de web scraping profissional para coleta e monitoramento de dados da web
 | `contexts.py` | 6 | `Resource` (Protocol), `managed_session()` (@contextmanager), `BrowserContext` (__enter__/__exit__), `open_resources()` (ExitStack) |
 | `http_client.py` | 8 | `HTTPClient` (httpx.Client wrapper), retry em 429/5xx, timeout configuravel, `NetworkError` em falhas de conexao |
 
-`scraper/app/parsers/` — todos com 100% de cobertura e mypy --strict passando:
+`scraper/app/parsers/` — todos com mypy --strict passando:
 
 | Arquivo | Dia | O que tem |
 |---|---|---|
-| `html_parser.py` | 9 | `parse_catalog_page()` (CSS via BS4+lxml), `extract_available_titles_xpath()` (XPath com lxml.etree), `BookData` TypedDict, `ParseError` defensivo |
+| `html_parser.py` | 9–10 | `parse_catalog_page()` (CSS via BS4+lxml), `extract_available_titles_xpath()` (XPath com lxml.etree), `extract_next_page_url()` (paginacao), `BookData` TypedDict, `ParseError` defensivo |
+
+`scraper/app/spiders/` — todos com mypy --strict passando:
+
+| Arquivo | Dia | O que tem |
+|---|---|---|
+| `books_spider.py` | 10 | `BooksSpider` (paginacao completa, deduplicacao por `set[str]`, salva JSON), `_save_json()`, entrypoint `__main__` |
 
 ## Decisoes
 - httpx no lugar de requests: suporte nativo a async
 - Playwright no lugar de Selenium: API moderna e async
 - uv no lugar de pip: reproducibilidade e velocidade
 - `UP047` ignorado no ruff (`ignore = ["UP047"]` em pyproject.toml): target-version e py312 mas o floor e 3.11; PEP 695 (type parameters) nao pode ser usado em codigo que precisa rodar no 3.11
+- `ParseError` em pagina nao interrompe paginacao: erro e logado e a spider segue para o proximo link
+- `NetworkError` interrompe a paginacao: erro de rede provavelmente afeta as paginas seguintes tambem
+- `cast(dict[str, str], book)` no lugar de `dict(book)`: TypedDict tem `__getitem__` com retorno `object` no mypy strict; cast e seguro porque TypedDict e um dict em runtime
 
 ## Decisoes Abertas
 - banco local: SQLite para dev, PostgreSQL para prod (decidir no Dia 11)
@@ -78,10 +87,13 @@ Sistema de web scraping profissional para coleta e monitoramento de dados da web
 ## Dividas Tecnicas
 (registrar aqui conforme aparecerem)
 
-## Proximo passo — Dia 10: Primeira Spider com Paginacao
+## Proximo passo — Dia 11: Armazenamento com SQLAlchemy
 
 Entregas esperadas:
-- `scraper/app/spiders/books_spider.py` — spider completa do `books.toscrape.com`
-- percorre todas as paginas sem loop infinito, com deduplicacao de URLs
+- modelo `ScrapedBook` com SQLAlchemy 2.0 (`Mapped`, `mapped_column`)
+- `StorageService` com upsert (inserir ou atualizar sem duplicar)
+- migration inicial com Alembic
+- spider do Dia 10 salva no banco em vez de JSON
+- testes com SQLite em memoria
 - salva resultado em JSON
 - testes com mock HTTP (respx) e fixtures HTML locais
