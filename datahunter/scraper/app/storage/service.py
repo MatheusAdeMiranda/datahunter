@@ -51,6 +51,9 @@ class StorageService:
 
     def count(self) -> int:
         """Return the total number of books stored."""
-        with Session(self._engine) as session:
-            result = session.scalar(select(func.count()).select_from(ScrapedBook))
-            return int(result) if result is not None else 0
+        try:
+            with Session(self._engine) as session:
+                result = session.scalar(select(func.count()).select_from(ScrapedBook))
+                return int(result) if result is not None else 0
+        except Exception as exc:
+            raise StorageError(f"failed to count books: {exc}") from exc

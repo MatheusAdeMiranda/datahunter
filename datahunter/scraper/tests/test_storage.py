@@ -162,3 +162,11 @@ def test_storage_error_raised_when_table_missing() -> None:
     with pytest.raises(StorageError, match="failed to save"):
         svc.save_items([_item("Book A")])
     eng.dispose()
+
+
+def test_count_raises_storage_error_when_table_missing() -> None:
+    eng = create_engine("sqlite:///:memory:")
+    svc = StorageService(eng)
+    with pytest.raises(StorageError, match="failed to count"):
+        svc.count()
+    eng.dispose()
