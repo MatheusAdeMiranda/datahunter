@@ -8,6 +8,7 @@ from scraper.app.core.exceptions import ParseError
 from scraper.app.parsers.html_parser import (
     BookData,
     extract_available_titles_xpath,
+    extract_next_page_url,
     parse_catalog_page,
 )
 
@@ -182,3 +183,36 @@ def test_xpath_returns_only_in_stock_titles(catalog_html: str) -> None:
 def test_xpath_returns_empty_for_no_matches() -> None:
     html = "<html><body><p>nothing</p></body></html>"
     assert extract_available_titles_xpath(html) == []
+
+
+# ── extract_next_page_url ─────────────────────────────────────────────────────
+
+
+_BASE = "https://books.toscrape.com/catalogue/page-1.html"
+_NEXT_HTML = (
+    '<html><body><ul class="pager">'
+    '<li class="next"><a href="page-2.html">next</a></li>'
+    "</ul></body></html>"
+)
+_PREV_ONLY_HTML = (
+    '<html><body><ul class="pager">'
+    '<li class="previous"><a href="page-1.html">previous</a></li>'
+    "</ul></body></html>"
+)
+_EMPTY_HREF_HTML = (
+    '<html><body><ul class="pager"><li class="next"><a href="">next</a></li></ul></body></html>'
+)
+
+
+def test_next_url_resolved_from_relative_href() -> None:
+    result = extract_next_page_url(_NEXT_HTML, _BASE)
+    assert result == "https://books.toscrape.com/catalogue/page-2.html"
+
+
+def test_next_url_is_none_on_last_page() -> None:
+    assert extract_next_page_url(_PREV_ONLY_HTML, _BASE) is None
+
+
+def test_next_url_is_none_when_href_is_empty() -> None:
+    # Defensive guard: <a href=""> should not be followed.
+    assert extract_next_page_url(_EMPTY_HREF_HTML, _BASE) is None

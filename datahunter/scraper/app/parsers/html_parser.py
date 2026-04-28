@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import TypedDict
+from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup, Tag
 from lxml import etree  # type: ignore[import-untyped]
@@ -22,6 +23,18 @@ def parse_catalog_page(html: str) -> list[BookData]:
     if not articles:
         raise ParseError("no article.product_pod elements found — page structure may have changed")
     return [_parse_article(article) for article in articles]
+
+
+def extract_next_page_url(html: str, current_url: str) -> str | None:
+    """Return the absolute URL of the next catalogue page, or None on the last page."""
+    soup = BeautifulSoup(html, "lxml")
+    next_a = soup.select_one("li.next > a")
+    if next_a is None:
+        return None
+    href = next_a.get("href")
+    if not isinstance(href, str) or not href:
+        return None
+    return urljoin(current_url, href)
 
 
 # ── XPath alternative ─────────────────────────────────────────────────────────
