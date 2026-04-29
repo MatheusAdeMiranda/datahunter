@@ -11,6 +11,7 @@ from scraper.app.core.http_client import HTTPClient
 from scraper.app.parsers.html_parser import extract_next_page_url, parse_catalog_page
 
 if TYPE_CHECKING:
+    from scraper.app.core.robots import RobotsChecker
     from scraper.app.storage.service import StorageService
 
 logger = logging.getLogger(__name__)
@@ -35,12 +36,14 @@ class BooksSpider:
         max_pages: int = 50,
         output_path: Path | None = _DEFAULT_OUTPUT,
         storage: StorageService | None = None,
+        robots_checker: RobotsChecker | None = None,
     ) -> None:
         self._client = client
         self._base_url = base_url
         self._max_pages = max_pages
         self._output_path = output_path
         self._storage = storage
+        self._robots_checker = robots_checker
 
     def crawl(self) -> ScrapingResult:
         job = ScrapingJob(url=self._base_url, max_pages=self._max_pages)
@@ -59,6 +62,10 @@ class BooksSpider:
             visited.add(current_url)
             logger.info("fetching page %d/%d: %s", len(visited), self._max_pages, current_url)
 
+            if self._robots_checker and not self._robots_checker.is_allowed(current_url):
+                logger.warning("robots.txt disallows %s, stopping crawl", current_url)
+                break
+
             try:
                 response = self._client.get(current_url)
                 html = response.text
@@ -68,17 +75,26 @@ class BooksSpider:
                 errors.append(msg)
                 break
 
+            next_url = extract_next_page_url(html, current_url)
+
             try:
                 books = parse_catalog_page(html)
-                for book in books:
-                    items.append(ScrapedItem(url=current_url, data=cast(dict[str, str], book)))
-                logger.info("extracted %d books from %s", len(books), current_url)
             except ParseError as exc:
                 msg = f"parse error on {current_url}: {exc}"
                 logger.error(msg)
                 errors.append(msg)
+                continue
 
-            next_url = extract_next_page_url(html, current_url)
+            page_items = 0
+            for book in books:
+                try:
+                    items.append(ScrapedItem(url=current_url, data=cast(dict[str, str], book)))
+                    page_items += 1
+                except Exception as exc:
+                    msg = f"item error on {current_url}: {exc}"
+                    logger.warning(msg)
+                    errors.append(msg)
+            logger.info("extracted %d books from %s", page_items, current_url)
 
         result = ScrapingResult(job=job, items=items, errors=errors)
 
