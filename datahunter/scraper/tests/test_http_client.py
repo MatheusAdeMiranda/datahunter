@@ -172,24 +172,24 @@ def test_context_manager_closes_client(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @respx.mock
 def test_no_sleep_between_retries_when_backoff_base_zero() -> None:
-    respx.get(URL).mock(
-        side_effect=[httpx.Response(503), httpx.Response(503), httpx.Response(200)]
-    )
-    with patch("scraper.app.core.http_client.time.sleep") as mock_sleep:
-        with HTTPClient(max_attempts=3, backoff_base=0.0) as client:
-            client.get(URL)
+    respx.get(URL).mock(side_effect=[httpx.Response(503), httpx.Response(503), httpx.Response(200)])
+    with (
+        patch("scraper.app.core.http_client.time.sleep") as mock_sleep,
+        HTTPClient(max_attempts=3, backoff_base=0.0) as client,
+    ):
+        client.get(URL)
     mock_sleep.assert_not_called()
 
 
 @respx.mock
 def test_exponential_backoff_between_retries() -> None:
-    respx.get(URL).mock(
-        side_effect=[httpx.Response(503), httpx.Response(503), httpx.Response(503)]
-    )
-    with patch("scraper.app.core.http_client.time.sleep") as mock_sleep:
-        with HTTPClient(max_attempts=3, backoff_base=1.0) as client:
-            with pytest.raises(NetworkError):
-                client.get(URL)
+    respx.get(URL).mock(side_effect=[httpx.Response(503), httpx.Response(503), httpx.Response(503)])
+    with (
+        patch("scraper.app.core.http_client.time.sleep") as mock_sleep,
+        HTTPClient(max_attempts=3, backoff_base=1.0) as client,
+        pytest.raises(NetworkError),
+    ):
+        client.get(URL)
     # sleep after attempt 1 (1.0 s) and attempt 2 (2.0 s), not after last attempt
     assert mock_sleep.call_args_list == [call(1.0), call(2.0)]
 
@@ -217,8 +217,8 @@ def test_rate_limit_sleeps_between_requests_to_same_domain() -> None:
         patch("scraper.app.core.http_client.time.monotonic", side_effect=fake_monotonic),
         HTTPClient(requests_per_second=2.0) as client,
     ):
-        client.get(URL)          # first request: no sleep
-        client.get(URL + "/2")   # second rapid request: should sleep
+        client.get(URL)  # first request: no sleep
+        client.get(URL + "/2")  # second rapid request: should sleep
 
     assert len(sleep_calls) == 1
     assert sleep_calls[0] > 0
@@ -248,7 +248,7 @@ def test_rate_limit_independent_per_domain() -> None:
         HTTPClient(requests_per_second=2.0) as client,
     ):
         client.get(url_a)
-        client.get(url_b)   # different domain: no sleep
+        client.get(url_b)  # different domain: no sleep
 
     assert sleep_calls == []
 
@@ -258,9 +258,11 @@ def test_no_rate_limit_when_requests_per_second_is_none() -> None:
     respx.get(URL).mock(return_value=httpx.Response(200))
     respx.get(URL + "/2").mock(return_value=httpx.Response(200))
 
-    with patch("scraper.app.core.http_client.time.sleep") as mock_sleep:
-        with HTTPClient(requests_per_second=None) as client:
-            client.get(URL)
-            client.get(URL + "/2")
+    with (
+        patch("scraper.app.core.http_client.time.sleep") as mock_sleep,
+        HTTPClient(requests_per_second=None) as client,
+    ):
+        client.get(URL)
+        client.get(URL + "/2")
 
     mock_sleep.assert_not_called()

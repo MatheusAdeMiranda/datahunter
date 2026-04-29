@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import collections
 import logging
 import time
 import urllib.parse
@@ -43,7 +42,7 @@ class HTTPClient:
         self._max_attempts = max_attempts
         self._backoff_base = backoff_base
         self._requests_per_second = requests_per_second
-        self._domain_timestamps: dict[str, collections.deque[float]] = {}
+        self._last_request_time: dict[str, float] = {}
         self._client = httpx.Client(
             headers=build_headers(headers),
             timeout=timeout,
@@ -62,13 +61,12 @@ class HTTPClient:
             return
         domain = urllib.parse.urlparse(url).netloc
         period = 1.0 / self._requests_per_second
-        timestamps = self._domain_timestamps.setdefault(domain, collections.deque())
-        now = time.monotonic()
-        if timestamps:
-            elapsed = now - timestamps[-1]
+        last = self._last_request_time.get(domain)
+        if last is not None:
+            elapsed = time.monotonic() - last
             if elapsed < period:
                 time.sleep(period - elapsed)
-        timestamps.append(time.monotonic())
+        self._last_request_time[domain] = time.monotonic()
 
     def _fetch(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
         last_exc: NetworkError | None = None

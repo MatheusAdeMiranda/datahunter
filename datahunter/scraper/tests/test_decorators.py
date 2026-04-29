@@ -78,9 +78,11 @@ class TestRetry:
         def fn() -> None:
             raise ValueError
 
-        with patch("scraper.app.core.decorators.time.sleep") as mock_sleep:
-            with pytest.raises(ValueError):
-                fn()
+        with (
+            patch("scraper.app.core.decorators.time.sleep") as mock_sleep,
+            pytest.raises(ValueError),
+        ):
+            fn()
         mock_sleep.assert_not_called()
 
     def test_exponential_backoff_delays(self) -> None:
@@ -88,9 +90,11 @@ class TestRetry:
         def fn() -> None:
             raise ValueError
 
-        with patch("scraper.app.core.decorators.time.sleep") as mock_sleep:
-            with pytest.raises(ValueError):
-                fn()
+        with (
+            patch("scraper.app.core.decorators.time.sleep") as mock_sleep,
+            pytest.raises(ValueError),
+        ):
+            fn()
         # 3 sleeps for attempts 1, 2, 3 (not after last attempt)
         assert mock_sleep.call_args_list == [call(1.0), call(2.0), call(4.0)]
 
@@ -99,9 +103,11 @@ class TestRetry:
         def fn() -> None:
             raise ValueError
 
-        with patch("scraper.app.core.decorators.time.sleep") as mock_sleep:
-            with pytest.raises(ValueError):
-                fn()
+        with (
+            patch("scraper.app.core.decorators.time.sleep") as mock_sleep,
+            pytest.raises(ValueError),
+        ):
+            fn()
         # only 1 sleep (after attempt 1, not after attempt 2 which is the last)
         mock_sleep.assert_called_once_with(1.0)
 

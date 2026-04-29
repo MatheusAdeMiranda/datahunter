@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import httpx
 import respx
 
 from scraper.app.core.http_client import HTTPClient
+from scraper.app.core.robots import RobotsChecker
 from scraper.app.spiders.books_spider import BooksSpider
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -190,10 +192,6 @@ def test_items_contain_expected_book_fields() -> None:
 
 @respx.mock
 def test_robots_checker_stops_crawl_when_disallowed() -> None:
-    from unittest.mock import MagicMock
-
-    from scraper.app.core.robots import RobotsChecker
-
     respx.get(PAGE1_URL).mock(return_value=httpx.Response(200, text=_page("books_page1.html")))
 
     checker = MagicMock(spec=RobotsChecker)
@@ -211,10 +209,6 @@ def test_robots_checker_stops_crawl_when_disallowed() -> None:
 
 @respx.mock
 def test_robots_checker_allows_crawl_when_permitted() -> None:
-    from unittest.mock import MagicMock
-
-    from scraper.app.core.robots import RobotsChecker
-
     respx.get(PAGE1_URL).mock(return_value=httpx.Response(200, text=_page("books_page2.html")))
 
     checker = MagicMock(spec=RobotsChecker)

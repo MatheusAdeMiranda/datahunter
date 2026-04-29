@@ -23,9 +23,7 @@ def _make_checker(user_agent: str = "datahunter-bot") -> tuple[HTTPClient, Robot
 
 @respx.mock
 def test_allows_url_when_robots_permits() -> None:
-    respx.get(ROBOTS_URL).mock(
-        return_value=httpx.Response(200, text="User-agent: *\nAllow: /\n")
-    )
+    respx.get(ROBOTS_URL).mock(return_value=httpx.Response(200, text="User-agent: *\nAllow: /\n"))
     _, checker = _make_checker()
     assert checker.is_allowed(f"{BASE_URL}/page") is True
 
@@ -33,9 +31,7 @@ def test_allows_url_when_robots_permits() -> None:
 @respx.mock
 def test_disallows_url_when_robots_forbids() -> None:
     respx.get(ROBOTS_URL).mock(
-        return_value=httpx.Response(
-            200, text="User-agent: *\nDisallow: /\n"
-        )
+        return_value=httpx.Response(200, text="User-agent: *\nDisallow: /\n")
     )
     _, checker = _make_checker()
     assert checker.is_allowed(f"{BASE_URL}/page") is False
@@ -44,9 +40,7 @@ def test_disallows_url_when_robots_forbids() -> None:
 @respx.mock
 def test_disallows_specific_path_only() -> None:
     respx.get(ROBOTS_URL).mock(
-        return_value=httpx.Response(
-            200, text="User-agent: *\nDisallow: /private/\n"
-        )
+        return_value=httpx.Response(200, text="User-agent: *\nDisallow: /private/\n")
     )
     _, checker = _make_checker()
     assert checker.is_allowed(f"{BASE_URL}/public/page") is True
@@ -58,10 +52,7 @@ def test_disallows_specific_path_only() -> None:
 
 @respx.mock
 def test_respects_specific_user_agent_rule() -> None:
-    robots_txt = (
-        "User-agent: datahunter-bot\nDisallow: /restricted/\n\n"
-        "User-agent: *\nAllow: /\n"
-    )
+    robots_txt = "User-agent: datahunter-bot\nDisallow: /restricted/\n\nUser-agent: *\nAllow: /\n"
     respx.get(ROBOTS_URL).mock(return_value=httpx.Response(200, text=robots_txt))
     _, checker = _make_checker(user_agent="datahunter-bot")
     assert checker.is_allowed(f"{BASE_URL}/public") is True
