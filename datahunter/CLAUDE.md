@@ -55,9 +55,15 @@ Sistema de web scraping profissional para coleta e monitoramento de dados da web
 | `exceptions.py` | 3 | `ScrapingError`, `NetworkError`, `ParseError`, `StorageError` |
 | `entities.py` | 3 | `ScrapingJob` (frozen dataclass), `ScrapedItem`, `ScrapingResult` |
 | `pipeline.py` | 4 | `PageIterator`, pipeline gerador, `itertools`, `functools.lru_cache` |
-| `decorators.py` | 5 | `@retry`, `@rate_limit` (sliding-window), `@log_execution` |
+| `decorators.py` | 5–12 | `@retry` (com `backoff_base` para backoff exponencial), `@rate_limit` (sliding-window), `@log_execution` |
 | `contexts.py` | 6 | `Resource` (Protocol), `managed_session()` (@contextmanager), `BrowserContext` (__enter__/__exit__), `open_resources()` (ExitStack) |
-| `http_client.py` | 8 | `HTTPClient` (httpx.Client wrapper), retry em 429/5xx, timeout configuravel, `NetworkError` em falhas de conexao |
+| `http_client.py` | 8–12 | `HTTPClient` (httpx.Client wrapper), retry em 429/5xx, timeout configuravel, `NetworkError` em falhas de conexao, backoff exponencial (`backoff_base`), rate limit por dominio (`requests_per_second`) |
+
+`scraper/app/core/robots.py` — com mypy --strict passando:
+
+| Arquivo | Dia | O que tem |
+|---|---|---|
+| `robots.py` | 12 | `RobotsChecker` — fetch + parse de `robots.txt` por dominio, cache, `is_allowed()`, falha silenciosa (permite tudo) em erro de rede ou non-200 |
 
 `scraper/app/parsers/` — todos com mypy --strict passando:
 
@@ -69,7 +75,7 @@ Sistema de web scraping profissional para coleta e monitoramento de dados da web
 
 | Arquivo | Dia | O que tem |
 |---|---|---|
-| `books_spider.py` | 10–11 | `BooksSpider` (paginacao completa, deduplicacao por `set[str]`, JSON e/ou DB), `_save_json()`, entrypoint `__main__` |
+| `books_spider.py` | 10–12 | `BooksSpider` (paginacao completa, deduplicacao por `set[str]`, JSON e/ou DB), `_save_json()`, `robots_checker` opcional, isolamento de erro por livro, entrypoint `__main__` |
 
 `scraper/app/storage/` — todos com mypy --strict passando:
 
@@ -98,6 +104,12 @@ Sistema de web scraping profissional para coleta e monitoramento de dados da web
 - `StorageService` injetado no spider via parametro opcional: testes do Dia 10 nao quebram (passam `storage=None`)
 - `StorageService` importado via `TYPE_CHECKING` no spider: evita importacao circular em runtime caso o modulo de storage importe algo do spider no futuro
 
+- `backoff_base * 2^(attempt-1)` no `@retry` e no `HTTPClient`: padrao exponencial classico; testavel via `patch("time.sleep")` sem sleep real
+- `requests_per_second: float | None = None` no HTTPClient: `None` desabilita o rate limit (testes existentes nao quebram); spider e `__main__` passam `2.0` conforme politica
+- `RobotsChecker` em `core/` e nao em `spiders/`: pode ser reutilizado por qualquer spider ou cliente HTTP futuro
+- `parser.parse([])` sempre chamado no `_fetch_parser`: garante que `last_checked` seja definido mesmo em erro/non-200; `can_fetch` retorna `True` sem regras de Disallow
+- `next_url = extract_next_page_url(html, current_url)` extraido ANTES do bloco `try/except ParseError`: preserva a capacidade de seguir para a proxima pagina mesmo quando o parse da atual falha
+
 ## Decisoes Abertas
 - framework de API para gerenciar jobs: a definir na Semana 4
 - upsert dialect-specific (`INSERT ... ON CONFLICT DO UPDATE`) para PostgreSQL: avaliar no Dia 19+ (async)
@@ -105,13 +117,4 @@ Sistema de web scraping profissional para coleta e monitoramento de dados da web
 ## Dividas Tecnicas
 (registrar aqui conforme aparecerem)
 
-## Proximo passo — Dia 12: Robustez (Retry, Rate Limiting e Tratamento de Erro)
-
-Entregas esperadas:
-- backoff exponencial no `@retry`
-- rate limiter por dominio no `HTTPClient`
-- spider nao para em erro de item isolado
-- verificacao de `robots.txt` antes de scraper
-- testes com SQLite em memoria
-- salva resultado em JSON
-- testes com mock HTTP (respx) e fixtures HTML locais
+## Proximo passo — Dia 13

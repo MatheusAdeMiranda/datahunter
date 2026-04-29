@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import httpx
 import respx
 
 from scraper.app.core.http_client import HTTPClient
+from scraper.app.core.robots import RobotsChecker
 from scraper.app.spiders.books_spider import BooksSpider
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -186,6 +188,39 @@ def test_items_contain_expected_book_fields() -> None:
     assert "Tipping the Velvet" in titles
     assert "Soumission" in titles
     assert "Sharp Objects" in titles
+
+
+@respx.mock
+def test_robots_checker_stops_crawl_when_disallowed() -> None:
+    respx.get(PAGE1_URL).mock(return_value=httpx.Response(200, text=_page("books_page1.html")))
+
+    checker = MagicMock(spec=RobotsChecker)
+    checker.is_allowed.return_value = False
+
+    with HTTPClient() as client:
+        result = BooksSpider(
+            client, base_url=PAGE1_URL, output_path=None, robots_checker=checker
+        ).crawl()
+
+    assert len(result) == 0
+    assert result.errors == []
+    checker.is_allowed.assert_called_once_with(PAGE1_URL)
+
+
+@respx.mock
+def test_robots_checker_allows_crawl_when_permitted() -> None:
+    respx.get(PAGE1_URL).mock(return_value=httpx.Response(200, text=_page("books_page2.html")))
+
+    checker = MagicMock(spec=RobotsChecker)
+    checker.is_allowed.return_value = True
+
+    with HTTPClient() as client:
+        result = BooksSpider(
+            client, base_url=PAGE1_URL, output_path=None, robots_checker=checker
+        ).crawl()
+
+    assert len(result) == 2
+    assert result.errors == []
 
 
 @respx.mock
