@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import collections
 import logging
+import time
+import urllib.parse
 from types import TracebackType
 from typing import Any
 
@@ -22,6 +25,10 @@ class HTTPClient:
 
     Uses a persistent session for connection pooling (one TCP handshake per
     host instead of one per request). Call close() or use as a context manager.
+
+    Per-domain rate limiting: when *requests_per_second* is set, at most that
+    many requests are dispatched per domain per second (sliding window).
+    Exponential backoff between retries: sleep backoff_base * 2^(attempt-1) s.
     """
 
     def __init__(
@@ -30,8 +37,13 @@ class HTTPClient:
         timeout: float = 10.0,
         max_attempts: int = 3,
         headers: dict[str, str] | None = None,
+        requests_per_second: float | None = None,
+        backoff_base: float = 0.0,
     ) -> None:
         self._max_attempts = max_attempts
+        self._backoff_base = backoff_base
+        self._requests_per_second = requests_per_second
+        self._domain_timestamps: dict[str, collections.deque[float]] = {}
         self._client = httpx.Client(
             headers=build_headers(headers),
             timeout=timeout,
@@ -44,9 +56,24 @@ class HTTPClient:
     def post(self, url: str, **kwargs: Any) -> httpx.Response:
         return self._fetch("POST", url, **kwargs)
 
+    def _wait_for_rate_limit(self, url: str) -> None:
+        """Block until dispatching *url* respects the per-domain rate limit."""
+        if self._requests_per_second is None:
+            return
+        domain = urllib.parse.urlparse(url).netloc
+        period = 1.0 / self._requests_per_second
+        timestamps = self._domain_timestamps.setdefault(domain, collections.deque())
+        now = time.monotonic()
+        if timestamps:
+            elapsed = now - timestamps[-1]
+            if elapsed < period:
+                time.sleep(period - elapsed)
+        timestamps.append(time.monotonic())
+
     def _fetch(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
         last_exc: NetworkError | None = None
         for attempt in range(1, self._max_attempts + 1):
+            self._wait_for_rate_limit(url)
             try:
                 response = self._client.request(method, url, **kwargs)
             except httpx.TimeoutException as err:
@@ -69,6 +96,8 @@ class HTTPClient:
                 url,
                 last_exc,
             )
+            if self._backoff_base > 0 and attempt < self._max_attempts:
+                time.sleep(self._backoff_base * (2 ** (attempt - 1)))
 
         assert last_exc is not None
         raise last_exc

@@ -16,8 +16,13 @@ T = TypeVar("T")
 def retry(
     times: int = 3,
     exceptions: tuple[type[BaseException], ...] = (Exception,),
+    backoff_base: float = 0.0,
 ) -> Callable[[Callable[P, T]], Callable[P, T]]:
-    """Retry the wrapped function up to *times* attempts on any listed exception."""
+    """Retry the wrapped function up to *times* attempts on any listed exception.
+
+    When *backoff_base* > 0, sleeps backoff_base * 2^(attempt-1) seconds before
+    each retry (exponential backoff: 1x, 2x, 4x, … of backoff_base).
+    """
 
     def decorator(fn: Callable[P, T]) -> Callable[P, T]:
         @functools.wraps(fn)
@@ -28,6 +33,8 @@ def retry(
                 except exceptions:
                     if attempt == times:
                         raise
+                    if backoff_base > 0:
+                        time.sleep(backoff_base * (2 ** (attempt - 1)))
             raise AssertionError("unreachable")  # pragma: no cover
 
         return wrapper

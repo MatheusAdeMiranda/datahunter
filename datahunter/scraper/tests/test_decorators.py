@@ -1,5 +1,5 @@
 import logging
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 import pytest
 
@@ -72,6 +72,54 @@ class TestRetry:
 
         assert my_function.__name__ == "my_function"
         assert my_function.__doc__ == "Docstring."
+
+    def test_no_sleep_when_backoff_base_is_zero(self) -> None:
+        @retry(times=3, exceptions=(ValueError,), backoff_base=0.0)
+        def fn() -> None:
+            raise ValueError
+
+        with patch("scraper.app.core.decorators.time.sleep") as mock_sleep:
+            with pytest.raises(ValueError):
+                fn()
+        mock_sleep.assert_not_called()
+
+    def test_exponential_backoff_delays(self) -> None:
+        @retry(times=4, exceptions=(ValueError,), backoff_base=1.0)
+        def fn() -> None:
+            raise ValueError
+
+        with patch("scraper.app.core.decorators.time.sleep") as mock_sleep:
+            with pytest.raises(ValueError):
+                fn()
+        # 3 sleeps for attempts 1, 2, 3 (not after last attempt)
+        assert mock_sleep.call_args_list == [call(1.0), call(2.0), call(4.0)]
+
+    def test_backoff_not_called_after_last_attempt(self) -> None:
+        @retry(times=2, exceptions=(ValueError,), backoff_base=1.0)
+        def fn() -> None:
+            raise ValueError
+
+        with patch("scraper.app.core.decorators.time.sleep") as mock_sleep:
+            with pytest.raises(ValueError):
+                fn()
+        # only 1 sleep (after attempt 1, not after attempt 2 which is the last)
+        mock_sleep.assert_called_once_with(1.0)
+
+    def test_backoff_not_called_on_success(self) -> None:
+        calls = 0
+
+        @retry(times=3, exceptions=(ValueError,), backoff_base=1.0)
+        def fn() -> str:
+            nonlocal calls
+            calls += 1
+            if calls < 2:
+                raise ValueError
+            return "ok"
+
+        with patch("scraper.app.core.decorators.time.sleep") as mock_sleep:
+            result = fn()
+        assert result == "ok"
+        mock_sleep.assert_called_once_with(1.0)
 
     def test_works_with_domain_exception(self) -> None:
         calls = 0
