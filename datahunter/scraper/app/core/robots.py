@@ -6,6 +6,7 @@ import urllib.robotparser
 
 from scraper.app.core.exceptions import NetworkError
 from scraper.app.core.http_client import HTTPClient
+from scraper.app.core.utils import ROBOTS_USER_AGENT
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +19,7 @@ class RobotsChecker:
     the URL so scraping is not silently broken by an inaccessible robots.txt.
     """
 
-    def __init__(self, client: HTTPClient, user_agent: str = "datahunter-bot") -> None:
+    def __init__(self, client: HTTPClient, user_agent: str = ROBOTS_USER_AGENT) -> None:
         self._client = client
         self._user_agent = user_agent
         self._cache: dict[str, urllib.robotparser.RobotFileParser] = {}

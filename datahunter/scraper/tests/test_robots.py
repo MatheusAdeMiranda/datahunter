@@ -7,12 +7,13 @@ import respx
 from scraper.app.core.exceptions import NetworkError
 from scraper.app.core.http_client import HTTPClient
 from scraper.app.core.robots import RobotsChecker
+from scraper.app.core.utils import ROBOTS_USER_AGENT
 
 BASE_URL = "https://example.com"
 ROBOTS_URL = f"{BASE_URL}/robots.txt"
 
 
-def _make_checker(user_agent: str = "datahunter-bot") -> tuple[HTTPClient, RobotsChecker]:
+def _make_checker(user_agent: str = ROBOTS_USER_AGENT) -> tuple[HTTPClient, RobotsChecker]:
     client = HTTPClient(max_attempts=1)
     checker = RobotsChecker(client, user_agent=user_agent)
     return client, checker
@@ -52,9 +53,16 @@ def test_disallows_specific_path_only() -> None:
 
 @respx.mock
 def test_respects_specific_user_agent_rule() -> None:
-    robots_txt = "User-agent: datahunter-bot\nDisallow: /restricted/\n\nUser-agent: *\nAllow: /\n"
+    # robots.txt uses the name without version ("datahunter"), because
+    # urllib.robotparser strips everything after "/" from the query agent
+    # before matching — so can_fetch("datahunter", url) matches
+    # "User-agent: datahunter". This mirrors how a real site admin
+    # would target our bot after seeing "datahunter/0.1" in their logs.
+    robots_txt = (
+        f"User-agent: {ROBOTS_USER_AGENT}\nDisallow: /restricted/\n\nUser-agent: *\nAllow: /\n"
+    )
     respx.get(ROBOTS_URL).mock(return_value=httpx.Response(200, text=robots_txt))
-    _, checker = _make_checker(user_agent="datahunter-bot")
+    _, checker = _make_checker()
     assert checker.is_allowed(f"{BASE_URL}/public") is True
     assert checker.is_allowed(f"{BASE_URL}/restricted/page") is False
 
