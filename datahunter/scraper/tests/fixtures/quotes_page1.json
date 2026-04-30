@@ -1,0 +1,20 @@
+{
+  "has_next": true,
+  "page": 1,
+  "quotes": [
+    {
+      "author": "Albert Einstein",
+      "author_permalink": "/author/Albert-Einstein",
+      "tags": ["change", "deep-thoughts", "thinking"],
+      "text": "The world as we have created it is a process of our thinking."
+    },
+    {
+      "author": "J.K. Rowling",
+      "author_permalink": "/author/J-K-Rowling",
+      "tags": ["abilities", "choices"],
+      "text": "It is our choices, Harry, that show what we truly are."
+    }
+  ],
+  "tag": null,
+  "top_ten_tags": ["love", "inspirational"]
+}
