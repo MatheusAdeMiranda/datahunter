@@ -136,4 +136,47 @@ Sistema de web scraping profissional para coleta e monitoramento de dados da web
 - `ROBOTS_USER_AGENT = BOT_USER_AGENT.split("/")[0]` = `"datahunter"`: agente usado no `RobotsChecker`. Python 3.11+ `urllib.robotparser` faz strip da versao na query (`can_fetch`) mas NAO na regra do robots.txt — entao `User-agent: datahunter` no robots.txt bate com `can_fetch("datahunter", url)` mas NAO com `can_fetch("datahunter/0.1", url)`. O agente de checagem deve ser o nome sem versao para que sites que bloqueiem `datahunter` nos logs sejam respeitados
 - Revisao senior da Semana 2: sem bugs criticos reais alem do user-agent. Padroes como `raise AssertionError("unreachable")`, `assert last_exc is not None` e `cast(dict[str,str], book)` sao corretos e documentados; nao foram alterados
 
-## Proximo passo — Dia 15
+## Estrategias para sites dinamicos (Dia 15)
+
+### Estrategia 1 — API interna (sem browser)
+
+Inspecionar aba Network → Fetch/XHR antes de qualquer codigo. Muitos sites que "renderizam com JS" buscam dados de um endpoint JSON proprio. Se encontrar, consumir direto com `httpx`.
+
+Exemplo: `quotes.toscrape.com/js/` → `GET /api/quotes?page=N` retorna JSON paginado com campo `has_next`. Nenhum Playwright necessario.
+
+### Estrategia 2 — Renderizacao headless (Playwright)
+
+Quando nao ha endpoint JSON detectavel (dados embutidos no JS, WebSocket, canvas), usar Playwright para renderizar o browser e extrair do DOM. Custo: ~10x mais lento, binario de browser necessario, maior superficie de deteccao. Ver Dia 16.
+
+### Quando usar cada uma
+
+| Sinal | Estrategia |
+|---|---|
+| Network tab mostra chamadas XHR/Fetch com JSON | API interna (httpx) |
+| Resposta HTML chega vazia, dados aparecem so apos render | Playwright |
+| Site carrega dados via WebSocket | Playwright + interceptacao |
+| Endpoint exige auth ou CSRF token complexo | Avaliar caso a caso |
+
+## Modulos existentes (atualizado Dia 15)
+
+`scraper/app/spiders/` — todos com mypy --strict passando:
+
+| Arquivo | Dia | O que tem |
+|---|---|---|
+| `books_spider.py` | 10–12 | `BooksSpider` (HTML + paginacao via "next" link, BS4, SQLite/Postgres) |
+| `quotes_spider.py` | 15 | `QuotesSpider` (JSON API, paginacao via `has_next`, sem browser) |
+
+`scraper/tests/fixtures/` — fixtures de teste:
+
+| Arquivo | Usado por |
+|---|---|
+| `books_catalog.html`, `books_page1.html`, `books_page2.html` | `test_html_parser.py`, `test_books_spider.py` |
+| `quotes_page1.json`, `quotes_page2.json` | `test_quotes_spider.py` |
+
+## Decisoes — Dia 15
+
+- `StorageService` nao persiste quotes: o modelo `ScrapedBook` tem campos especificos de livro (`title`, `price`, `availability`, `rating`); quotes tem campos diferentes (`text`, `author`, `tags`). Para persistir quotes, criar `ScrapedQuote` (modelo separado) — avaliar no Dia 19+ quando armazenamento async for introduzido
+- `_extract_quote` e `_parse_response` exportadas (sem underscore duplo): permitem teste unitario direto sem instanciar o spider
+- Tags sao joinadas como CSV string (`"tag1, tag2"`) para caber no schema generico `dict[str, str]` do `ScrapedItem.data` sem alterar a entidade
+
+## Proximo passo — Dia 16
