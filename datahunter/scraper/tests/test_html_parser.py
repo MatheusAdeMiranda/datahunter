@@ -86,73 +86,64 @@ def test_rating(catalog_html: str, index: int, expected_rating: str) -> None:
 
 
 # ── ParseError on broken structure ────────────────────────────────────────────
+# Each tuple is (html_fragment, error_pattern).
+# This table is the first line of defence: if books.toscrape.com changes its
+# markup, adding a row here documents the new failure mode before fixing it.
+
+_BROKEN_HTML_CASES: list[tuple[str, str]] = [
+    (
+        "<html><body><p>nothing here</p></body></html>",
+        r"no article\.product_pod",
+    ),
+    (
+        """<article class="product_pod">
+          <p class="price_color">£10.00</p>
+          <p class="availability">In stock</p>
+          <p class="star-rating Three"></p>
+        </article>""",
+        "h3 > a",
+    ),
+    (
+        """<article class="product_pod">
+          <h3><a href="#" title="Some Book">Some Book</a></h3>
+          <p class="availability">In stock</p>
+          <p class="star-rating Two"></p>
+        </article>""",
+        r"p\.price_color",
+    ),
+    (
+        """<article class="product_pod">
+          <h3><a href="#" title="Some Book">Some Book</a></h3>
+          <p class="price_color">£10.00</p>
+          <p class="star-rating Two"></p>
+        </article>""",
+        r"p\.availability",
+    ),
+    (
+        """<article class="product_pod">
+          <h3><a href="#" title="Some Book">Some Book</a></h3>
+          <p class="price_color">£10.00</p>
+          <p class="availability">In stock</p>
+        </article>""",
+        r"p\.star-rating",
+    ),
+    (
+        # <p class="star-rating"> with no second class — rating word absent.
+        """<article class="product_pod">
+          <h3><a href="#" title="Some Book">Some Book</a></h3>
+          <p class="price_color">£10.00</p>
+          <p class="availability">In stock</p>
+          <p class="star-rating"></p>
+        </article>""",
+        "rating word not found",
+    ),
+]
 
 
-def test_raises_when_no_articles() -> None:
-    with pytest.raises(ParseError, match=r"no article\.product_pod"):
-        parse_catalog_page("<html><body><p>nothing here</p></body></html>")
-
-
-def test_raises_when_title_element_missing() -> None:
-    html = """
-    <article class="product_pod">
-      <p class="price_color">£10.00</p>
-      <p class="availability">In stock</p>
-      <p class="star-rating Three"></p>
-    </article>
-    """
-    with pytest.raises(ParseError, match="h3 > a"):
-        parse_catalog_page(html)
-
-
-def test_raises_when_price_element_missing() -> None:
-    html = """
-    <article class="product_pod">
-      <h3><a href="#" title="Some Book">Some Book</a></h3>
-      <p class="availability">In stock</p>
-      <p class="star-rating Two"></p>
-    </article>
-    """
-    with pytest.raises(ParseError, match=r"p\.price_color"):
-        parse_catalog_page(html)
-
-
-def test_raises_when_availability_element_missing() -> None:
-    html = """
-    <article class="product_pod">
-      <h3><a href="#" title="Some Book">Some Book</a></h3>
-      <p class="price_color">£10.00</p>
-      <p class="star-rating Two"></p>
-    </article>
-    """
-    with pytest.raises(ParseError, match=r"p\.availability"):
-        parse_catalog_page(html)
-
-
-def test_raises_when_rating_element_missing() -> None:
-    html = """
-    <article class="product_pod">
-      <h3><a href="#" title="Some Book">Some Book</a></h3>
-      <p class="price_color">£10.00</p>
-      <p class="availability">In stock</p>
-    </article>
-    """
-    with pytest.raises(ParseError, match=r"p\.star-rating"):
-        parse_catalog_page(html)
-
-
-def test_raises_when_rating_word_absent_from_class_list() -> None:
-    # <p class="star-rating"> with no second class — no "One"/"Two"/etc.
-    html = """
-    <article class="product_pod">
-      <h3><a href="#" title="Some Book">Some Book</a></h3>
-      <p class="price_color">£10.00</p>
-      <p class="availability">In stock</p>
-      <p class="star-rating"></p>
-    </article>
-    """
-    with pytest.raises(ParseError, match="rating word not found"):
-        parse_catalog_page(html)
+@pytest.mark.parametrize(("html_fragment", "error_match"), _BROKEN_HTML_CASES)
+def test_parse_error_on_broken_html(html_fragment: str, error_match: str) -> None:
+    with pytest.raises(ParseError, match=error_match):
+        parse_catalog_page(html_fragment)
 
 
 def test_title_falls_back_to_text_when_attribute_absent() -> None:
@@ -204,15 +195,21 @@ _EMPTY_HREF_HTML = (
 )
 
 
-def test_next_url_resolved_from_relative_href() -> None:
-    result = extract_next_page_url(_NEXT_HTML, _BASE)
-    assert result == "https://books.toscrape.com/catalogue/page-2.html"
-
-
-def test_next_url_is_none_on_last_page() -> None:
-    assert extract_next_page_url(_PREV_ONLY_HTML, _BASE) is None
-
-
-def test_next_url_is_none_when_href_is_empty() -> None:
-    # Defensive guard: <a href=""> should not be followed.
-    assert extract_next_page_url(_EMPTY_HREF_HTML, _BASE) is None
+@pytest.mark.parametrize(
+    ("html", "expected"),
+    [
+        (_NEXT_HTML, "https://books.toscrape.com/catalogue/page-2.html"),
+        (_PREV_ONLY_HTML, None),
+        (_EMPTY_HREF_HTML, None),
+        # No pager element at all.
+        ("<html><body></body></html>", None),
+        # Root-relative href — urljoin must resolve against the origin, not the path.
+        (
+            '<ul class="pager"><li class="next">'
+            '<a href="/catalogue/page-3.html">next</a></li></ul>',
+            "https://books.toscrape.com/catalogue/page-3.html",
+        ),
+    ],
+)
+def test_next_page_url(html: str, expected: str | None) -> None:
+    assert extract_next_page_url(html, _BASE) == expected

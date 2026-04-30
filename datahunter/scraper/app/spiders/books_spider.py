@@ -87,13 +87,8 @@ class BooksSpider:
 
             page_items = 0
             for book in books:
-                try:
-                    items.append(ScrapedItem(url=current_url, data=cast(dict[str, str], book)))
-                    page_items += 1
-                except Exception as exc:
-                    msg = f"item error on {current_url}: {exc}"
-                    logger.warning(msg)
-                    errors.append(msg)
+                items.append(ScrapedItem(url=current_url, data=cast(dict[str, str], book)))
+                page_items += 1
             logger.info("extracted %d books from %s", page_items, current_url)
 
         result = ScrapingResult(job=job, items=items, errors=errors)
@@ -117,7 +112,7 @@ def _save_json(result: ScrapingResult, path: Path) -> None:
     logger.info("saved %d items to %s", len(payload), path)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     from sqlalchemy import create_engine
 
     from scraper.app.storage.service import StorageService
