@@ -117,4 +117,15 @@ Sistema de web scraping profissional para coleta e monitoramento de dados da web
 ## Dividas Tecnicas
 (registrar aqui conforme aparecerem)
 
-## Proximo passo — Dia 13
+## Cobertura de testes
+
+- **100%** em todos os modulos de `scraper/` (517 statements, 0 missed)
+- Entrypoints `if __name__ == "__main__"` marcados com `# pragma: no cover` (nao sao unidades testavel)
+- Casos de HTML invalido organizados como tabelas `@pytest.mark.parametrize` em `test_html_parser.py`: facil adicionar nova linha quando o site mudar
+- Nenhum teste faz requisicao real de rede: tudo mockado com `respx` ou fixtures HTML locais em `scraper/tests/fixtures/`
+
+## Decisao — Dia 13
+
+- `try/except Exception` em volta de `ScrapedItem(...)` removido do spider: frozen dataclass com inputs validos nao pode lancar excecao; o bloco era codigo morto que reduzia legibilidade e criava gap de cobertura artificialmente irresolvivel
+
+## Proximo passo — Dia 14
