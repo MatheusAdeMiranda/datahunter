@@ -179,4 +179,28 @@ Quando nao ha endpoint JSON detectavel (dados embutidos no JS, WebSocket, canvas
 - `_extract_quote` e `_parse_response` exportadas (sem underscore duplo): permitem teste unitario direto sem instanciar o spider
 - Tags sao joinadas como CSV string (`"tag1, tag2"`) para caber no schema generico `dict[str, str]` do `ScrapedItem.data` sem alterar a entidade
 
-## Proximo passo — Dia 16
+## Modulos existentes (atualizado Dia 16)
+
+`scraper/app/browsers/` — todos com mypy --strict passando:
+
+| Arquivo | Dia | O que tem |
+|---|---|---|
+| `playwright_client.py` | 16 | `PlaywrightClient` — context manager headless Chromium, `add_route()` para interceptacao de requests, `fetch_html()`, `iter_pages()` com paginacao por clique |
+| `quotes_pw_spider.py` | 16 | `QuotesPWSpider` — scraping via DOM renderizado (Strategy 2), BS4 parsing, isolamento de erro por quote, JSON output |
+
+`scraper/tests/fixtures/` — fixtures de teste atualizadas:
+
+| Arquivo | Usado por |
+|---|---|
+| `quotes_pw_page1.html`, `quotes_pw_page2.html`, `quotes_pw_malformed.html` | `test_playwright_client.py` |
+
+## Decisoes — Dia 16
+
+- `PlaywrightClient.add_route(pattern, handler)` registra interceptadores aplicados a toda nova page criada pelo cliente: testes passam HTML estatico via `page.route()` sem servidor externo nem rede real
+- `concurrency = ["thread", "greenlet"]` no `[tool.coverage.run]` do pyproject.toml: Playwright sync API usa greenlets internamente para sincronizar o event loop asyncio com o thread principal — sem essa configuracao, `coverage.py` nao rastreia linhas executadas atraves de `greenlet.switch()` e reporta 59% mesmo com todos os testes passando
+- `iter_pages` faz `break` apos o `yield` da ultima pagina permitida (`page_num == max_pages`) ANTES de tentar clicar no proximo botao: evita navegar para uma URL que pode nao existir no ambiente de teste e causar timeout no `wait_for_selector`
+- `QuotesPWSpider` usa BS4 + lxml para parsing do HTML renderizado: mesma stack do `BooksSpider`, sem dependencia extra; o Playwright so e responsavel por renderizar o JS e entregar o HTML final
+- `_extract_quotes` isolado de `_extract_one` para permitir teste unitario de `_extract_one` sem browser (tag BS4 construida diretamente em Python); `_extract_quotes` e testada via spider integration test com fixture HTML
+- `quotes.toscrape.com/js/` e o mesmo site do Dia 15 — intencional para contrastar: Dia 15 usou a API JSON interna (Strategy 1, sem browser), Dia 16 usa o DOM renderizado (Strategy 2, com Playwright); mesmo dado, custo diferente
+
+## Proximo passo — Dia 17
