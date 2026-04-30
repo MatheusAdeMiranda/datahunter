@@ -115,11 +115,13 @@ Sistema de web scraping profissional para coleta e monitoramento de dados da web
 - upsert dialect-specific (`INSERT ... ON CONFLICT DO UPDATE`) para PostgreSQL: avaliar no Dia 19+ (async)
 
 ## Dividas Tecnicas
-(registrar aqui conforme aparecerem)
+
+- `_wait_for_rate_limit` no `HTTPClient` impoe intervalo minimo entre requests por dominio (nao janela deslizante como o decorator `@rate_limit`): comportamento correto para scraper, mas a diferenca de semantica nao esta documentada no codigo — avaliar unificacao ou comentario no Dia 18+ (async)
+- `StorageService.save_items` envolve qualquer excecao como `StorageError`: um `KeyError` por chave ausente no `item.data` geraria mensagem confusa; adicionar validacao de campos antes da sessao de banco no Dia 19+ (storage async)
 
 ## Cobertura de testes
 
-- **100%** em todos os modulos de `scraper/` (517 statements, 0 missed)
+- **100%** em todos os modulos de `scraper/` (520 statements, 0 missed)
 - Entrypoints `if __name__ == "__main__"` marcados com `# pragma: no cover` (nao sao unidades testavel)
 - Casos de HTML invalido organizados como tabelas `@pytest.mark.parametrize` em `test_html_parser.py`: facil adicionar nova linha quando o site mudar
 - Nenhum teste faz requisicao real de rede: tudo mockado com `respx` ou fixtures HTML locais em `scraper/tests/fixtures/`
@@ -128,4 +130,10 @@ Sistema de web scraping profissional para coleta e monitoramento de dados da web
 
 - `try/except Exception` em volta de `ScrapedItem(...)` removido do spider: frozen dataclass com inputs validos nao pode lancar excecao; o bloco era codigo morto que reduzia legibilidade e criava gap de cobertura artificialmente irresolvivel
 
-## Proximo passo — Dia 14
+## Decisoes — Dia 14
+
+- `BOT_USER_AGENT = "datahunter/0.1"` em `utils.py`: string completa usada no header HTTP (padrao `Nome/Versao`)
+- `ROBOTS_USER_AGENT = BOT_USER_AGENT.split("/")[0]` = `"datahunter"`: agente usado no `RobotsChecker`. Python 3.11+ `urllib.robotparser` faz strip da versao na query (`can_fetch`) mas NAO na regra do robots.txt — entao `User-agent: datahunter` no robots.txt bate com `can_fetch("datahunter", url)` mas NAO com `can_fetch("datahunter/0.1", url)`. O agente de checagem deve ser o nome sem versao para que sites que bloqueiem `datahunter` nos logs sejam respeitados
+- Revisao senior da Semana 2: sem bugs criticos reais alem do user-agent. Padroes como `raise AssertionError("unreachable")`, `assert last_exc is not None` e `cast(dict[str,str], book)` sao corretos e documentados; nao foram alterados
+
+## Proximo passo — Dia 15
