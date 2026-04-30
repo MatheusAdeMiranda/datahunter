@@ -5,11 +5,21 @@ from collections.abc import Callable, Generator, Iterable
 from types import MappingProxyType
 from typing import Any, cast
 
+# Single source of truth for the bot's identity.
+# HTTP requests use the full "name/version" string (standard User-Agent format).
+# robots.txt checks use only the name (no version), because Python's
+# urllib.robotparser strips everything after "/" from the query agent before
+# matching — so "datahunter/0.1" → "datahunter" when calling can_fetch().
+# A site admin who sees "datahunter/0.1" in their logs and writes
+# "User-agent: datahunter" in robots.txt expects it to be respected.
+BOT_USER_AGENT: str = "datahunter/0.1"
+ROBOTS_USER_AGENT: str = BOT_USER_AGENT.split("/")[0]  # "datahunter"
+
 # MappingProxyType makes this truly read-only: any attempt to mutate it raises
 # TypeError at runtime, so callers cannot corrupt future build_headers() calls.
 _DEFAULT_HEADERS: MappingProxyType[str, str] = MappingProxyType(
     {
-        "User-Agent": "datahunter/0.1",
+        "User-Agent": BOT_USER_AGENT,
         "Accept-Encoding": "gzip",
         "Accept": "text/html,application/xhtml+xml",
     }
