@@ -43,6 +43,7 @@ playwright-report/
 output/
 *.json
 !*.example.json
+!scraper/tests/fixtures/*.json
 
 # Docker
 .docker/

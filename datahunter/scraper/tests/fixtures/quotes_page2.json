@@ -1,0 +1,14 @@
+{
+  "has_next": false,
+  "page": 2,
+  "quotes": [
+    {
+      "author": "Mark Twain",
+      "author_permalink": "/author/Mark-Twain",
+      "tags": ["books", "reading"],
+      "text": "The man who does not read has no advantage over the man who cannot read."
+    }
+  ],
+  "tag": null,
+  "top_ten_tags": ["love", "inspirational"]
+}
