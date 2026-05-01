@@ -203,4 +203,30 @@ Quando nao ha endpoint JSON detectavel (dados embutidos no JS, WebSocket, canvas
 - `_extract_quotes` isolado de `_extract_one` para permitir teste unitario de `_extract_one` sem browser (tag BS4 construida diretamente em Python); `_extract_quotes` e testada via spider integration test com fixture HTML
 - `quotes.toscrape.com/js/` e o mesmo site do Dia 15 — intencional para contrastar: Dia 15 usou a API JSON interna (Strategy 1, sem browser), Dia 16 usa o DOM renderizado (Strategy 2, com Playwright); mesmo dado, custo diferente
 
-## Proximo passo — Dia 17
+## Modulos existentes (atualizado Dia 17)
+
+`scraper/app/browsers/` — todos com mypy --strict passando:
+
+| Arquivo | Dia | O que tem |
+|---|---|---|
+| `playwright_client.py` | 16 | `PlaywrightClient` — context manager headless Chromium, `add_route()` para interceptacao de requests, `fetch_html()`, `iter_pages()` com paginacao por clique |
+| `quotes_pw_spider.py` | 16 | `QuotesPWSpider` — scraping via DOM renderizado (Strategy 2), BS4 parsing, isolamento de erro por quote, JSON output |
+| `quotes_intercept_spider.py` | 17 | `QuotesInterceptSpider` — captura respostas XHR com `page.expect_response()` (Strategy 3), `page.evaluate()` para ler estado JS, zero HTML parsing |
+
+`scraper/tests/fixtures/` — fixtures de teste atualizadas:
+
+| Arquivo | Usado por |
+|---|---|
+| `quotes_intercept.html` | `test_quotes_intercept_spider.py` — mini-SPA com `fetch('/api/quotes?page=N')` no DOMContentLoaded e botao Next |
+
+## Decisoes — Dia 17
+
+- `page.expect_response(predicate)` em vez de `page.on("response", handler)`: o context manager garante que o listener e registrado ANTES da acao que dispara o XHR, eliminando o race condition onde a resposta poderia chegar antes do listener; `page.on` e adequado para captura continua de multiplas respostas sem saber quando chegam
+- `_is_api_response(response: PlaywrightResponse) -> bool` como funcao nomeada em vez de lambda: mypy --strict exige anotacao explicita de tipo no parametro; funcao nomeada e mais legivel e testavel que lambda anonimo
+- `self.page_title = str(page.evaluate("() => document.title"))`: `page.evaluate()` retorna `Any`; o `str()` converte explicitamente para satisfazer mypy --strict sem precisar de `cast`; demonstra acesso a estado JS em runtime invisivel via CSS/XPath
+- `cast(dict[str, Any], resp_info.value.json())`: `Response.json()` retorna `Any`; `cast` e necessario para mypy atribuir o tipo correto a `api_data` sem introducir checagem de runtime desnecessaria
+- `QuotesInterceptSpider` nao faz HTML parsing: a resposta XHR ja e JSON estruturado; nao ha BS4, lxml nem seletores — se o site mudar o HTML renderizado, o spider nao quebra
+- Branch defensivo `next_btn.count() == 0` cobre inconsistencia DOM/API: `has_next=True` na resposta JSON mas botao nao presente no DOM (race condition ou bug do site); testado com fixture HTML sem botao Next mas que ainda dispara o XHR inicial
+- Mesmo site `quotes.toscrape.com/js/` usado nos tres dias para comparacao direta das tres estrategias: Strategy 1 (httpx, sem browser) e 10x mais rapida; Strategy 3 (interceptacao) e equivalente em velocidade a Strategy 2 (DOM) mas mais robusta a mudancas de layout
+
+## Proximo passo — Dia 18

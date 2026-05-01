@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Quotes to Scrape (JS)</title>
+</head>
+<body>
+  <div id="quotes"></div>
+  <ul class="pager">
+    <li class="next" id="next-li" style="display:none">
+      <a href="#">Next &#x2192;</a>
+    </li>
+  </ul>
+  <script>
+    var _currentPage = 1;
+
+    function loadPage(page) {
+      fetch('/api/quotes?page=' + page)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          var container = document.getElementById('quotes');
+          container.innerHTML = '';
+          (data.quotes || []).forEach(function(item) {
+            var div = document.createElement('div');
+            div.className = 'quote';
+            div.innerHTML =
+              '<span class="text">' + item.text + '</span>' +
+              '<small class="author">' + item.author + '</small>';
+            container.appendChild(div);
+          });
+          _currentPage = page;
+          var nextLi = document.getElementById('next-li');
+          if (data.has_next) {
+            nextLi.style.display = '';
+          } else {
+            nextLi.style.display = 'none';
+          }
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      document.getElementById('next-li').querySelector('a').addEventListener('click', function(e) {
+        e.preventDefault();
+        loadPage(_currentPage + 1);
+      });
+      loadPage(1);
+    });
+  </script>
+</body>
+</html>
