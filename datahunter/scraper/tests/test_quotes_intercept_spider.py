@@ -177,9 +177,7 @@ def test_extract_quote_raises_on_empty_author() -> None:
 
 
 def test_extract_quote_joins_tags_as_csv() -> None:
-    result = _extract_quote(
-        {"text": "T", "author": "A", "tags": ["a", "b", "c"]}, "http://test"
-    )
+    result = _extract_quote({"text": "T", "author": "A", "tags": ["a", "b", "c"]}, "http://test")
     assert result["tags"] == "a, b, c"
 
 
