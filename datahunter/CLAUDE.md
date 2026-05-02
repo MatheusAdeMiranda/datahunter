@@ -294,4 +294,40 @@ Quando nao ha endpoint JSON detectavel (dados embutidos no JS, WebSocket, canvas
 - `StorageService.save_items` envolve qualquer excecao como `StorageError`: validacao de campos antes da sessao seria mais precisa — avaliar no Dia 20+
 - `_save_json` duplicada em `books_spider.py` e `async_books_spider.py`: extrair para `scraper/app/core/utils.py` ou modulo proprio no Dia 21+
 
-## Proximo passo — Dia 20
+## Modulos existentes (atualizado Dia 20)
+
+`scraper/app/browsers/` — todos com mypy --strict passando:
+
+| Arquivo | Dia | O que tem |
+|---|---|---|
+| `playwright_client.py` | 16 | `PlaywrightClient` — sync, headless Chromium, `add_route()`, `fetch_html()`, `iter_pages()` |
+| `quotes_pw_spider.py` | 16 | `QuotesPWSpider` — DOM renderizado, BS4, JSON output |
+| `quotes_intercept_spider.py` | 17 | `QuotesInterceptSpider` — interceptacao XHR via `page.expect_response()`, zero HTML parsing |
+| `async_playwright_client.py` | 20 | `AsyncPlaywrightClient` — async context manager, `BrowserContext` isolado por fetch, `asyncio.Semaphore` para cap de concorrencia, `add_route()` para interceptacao em testes |
+| `async_quotes_pw_spider.py` | 20 | `AsyncQuotesPWSpider` — recebe lista de URLs, scraping paralelo com `asyncio.gather`, `Semaphore(max_concurrent)`, JSON output |
+
+`scraper/app/benchmarks/` — scripts de medicao (omitidos do coverage):
+
+| Arquivo | Dia | O que tem |
+|---|---|---|
+| `sync_vs_async.py` | 18 | benchmark sequencial vs concorrente: 20 requests x 50ms → ~16x speedup |
+| `parallel_browsers.py` | 20 | benchmark max_concurrent=1..6 com `asyncio.sleep(200ms)` simulando render JS: speedup quase linear com o numero de contexts paralelos |
+
+## Decisoes — Dia 20
+
+- `AsyncPlaywrightClient` separa o `BrowserContext` (e o `Page`) por chamada de `fetch_html()`: cada request abr e fecha seu proprio contexto — sem vazamento de cookies, sessao ou localStorage entre fetches paralelos
+- `asyncio.Semaphore` aceito opcionalmente em `fetch_html(url, semaphore=...)`: quem chama controla o cap de concorrencia, como no `AsyncHTTPClient` do Dia 18; sem semaphore, todos os contexts abrem simultaneamente
+- `contextlib.AbstractAsyncContextManager[Any]` reutilizado como tipo de `lock`: mesma decisao do Dia 18 — unifica `asyncio.Semaphore` e `contextlib.nullcontext()` sem duplicar o bloco `async with`
+- `AsyncQuotesPWSpider` cria o `Semaphore` internamente com `max_concurrent` e o passa para `fetch_html()`: encapsula a politica de concorrencia na spider sem expor o semaphore para quem instancia
+- `asyncio.gather(*[scrape_one(url) for url in urls])`: todas as coroutines sao agendadas de uma vez; o semaphore e que garante que no maximo `max_concurrent` browsers estejam abertos simultaneamente
+- `page.route()` registrado por contexto (dentro de `fetch_html`) e por page (dentro de `new_page()`): os dois metodos precisam aplicar as rotas porque sao independentes; testes dos dois caminhos cobrem ambas as listas de rotas
+- Benchmark `parallel_browsers.py` usa `asyncio.sleep(0.2)` para simular render JS: resultado: `max_concurrent=1: 1.25s`, `max_concurrent=2: 0.62s`, `max_concurrent=3: 0.42s`, `max_concurrent=6: 0.20s` — speedup quase linear confirma que o semaphore nao introduz overhead significativo
+
+## Dividas Tecnicas (atualizado Dia 20)
+
+- `_wait_for_rate_limit` no `HTTPClient` impoe intervalo minimo entre requests por dominio (nao janela deslizante): avaliar unificacao no Dia 21+
+- `_wait_for_rate_limit` no `AsyncHTTPClient` nao e concurrency-safe: race condition entre check e update de `_last_request_time` — adicionar `asyncio.Lock` por dominio
+- `StorageService.save_items` envolve qualquer excecao como `StorageError`: validacao de campos antes da sessao seria mais precisa — avaliar no Dia 21+
+- `_save_json` duplicada em `books_spider.py`, `async_books_spider.py` e `async_quotes_pw_spider.py`: extrair para `scraper/app/core/utils.py` ou modulo proprio no Dia 21+
+
+## Proximo passo — Dia 21
