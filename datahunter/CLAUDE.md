@@ -229,4 +229,34 @@ Quando nao ha endpoint JSON detectavel (dados embutidos no JS, WebSocket, canvas
 - Branch defensivo `next_btn.count() == 0` cobre inconsistencia DOM/API: `has_next=True` na resposta JSON mas botao nao presente no DOM (race condition ou bug do site); testado com fixture HTML sem botao Next mas que ainda dispara o XHR inicial
 - Mesmo site `quotes.toscrape.com/js/` usado nos tres dias para comparacao direta das tres estrategias: Strategy 1 (httpx, sem browser) e 10x mais rapida; Strategy 3 (interceptacao) e equivalente em velocidade a Strategy 2 (DOM) mas mais robusta a mudancas de layout
 
-## Proximo passo — Dia 18
+## Modulos existentes (atualizado Dia 18)
+
+`scraper/app/core/` — todos com mypy --strict passando:
+
+| Arquivo | Dia | O que tem |
+|---|---|---|
+| `async_http_client.py` | 18 | `AsyncHTTPClient` — equivalente async do `HTTPClient`: `httpx.AsyncClient`, `asyncio.Semaphore` para concorrencia, `asyncio.sleep` para backoff, `_wait_for_rate_limit` async |
+
+`scraper/app/benchmarks/` — scripts de medicao (omitidos do coverage):
+
+| Arquivo | Dia | O que tem |
+|---|---|---|
+| `sync_vs_async.py` | 18 | benchmark sequencial vs concorrente: 20 requests x 50ms latencia simulada → ~16x de speedup |
+
+## Decisoes — Dia 18
+
+- `AsyncHTTPClient` adicionado ao lado do `HTTPClient` sincronizado (nao substitui): o sincrono ainda e valido para scripts simples e testes sem event loop; o async e a escolha para spiders em escala
+- `asyncio.Semaphore` injetado via construtor (`semaphore: asyncio.Semaphore | None = None`): quem chama controla o nivel de concorrencia; sem semaphore, todas as coroutines correm livres — correto para benchmark, perigoso para producao
+- `contextlib.AbstractAsyncContextManager[Any]` como tipo da variavel `lock`: unifica `asyncio.Semaphore` e `contextlib.nullcontext()` sem duplicar o corpo do loop de retry; mypy --strict aceita porque `Any` e compativel com o tipo retornado por `__aenter__` em ambos
+- `asyncio.sleep` no lugar de `time.sleep` para backoff: `time.sleep` bloqueia a thread inteira e paralisa o event loop; `asyncio.sleep` suspende so a coroutine e cede o loop para outras tasks
+- Rate limit nao e concurrency-safe no `AsyncHTTPClient`: a janela deslizante pode ser violada entre o check e o update (`_last_request_time`) quando multiplas coroutines compartilham o mesmo cliente, pois ha um `await` no meio. Fix: `asyncio.Lock` por dominio — avaliar no Dia 19+ (ver Dividas Tecnicas)
+- `*/benchmarks/*` adicionado ao `omit` do coverage: scripts de medicao nao sao codigo de biblioteca e nao precisam ser cobertos por testes automatizados
+- Benchmark usa `time.sleep` / `asyncio.sleep` como simulacao de latencia de rede: nao faz requisicoes reais, mas demonstra com clareza o ganho de concorrencia (~16x com 20 requests e 50ms de latencia)
+
+## Dividas Tecnicas (atualizado Dia 18)
+
+- `_wait_for_rate_limit` no `HTTPClient` impoe intervalo minimo entre requests por dominio (nao janela deslizante como o decorator `@rate_limit`): comportamento correto para scraper, mas a diferenca de semantica nao esta documentada no codigo — avaliar unificacao ou comentario no Dia 19+
+- `_wait_for_rate_limit` no `AsyncHTTPClient` nao e concurrency-safe: race condition entre check e update de `_last_request_time` em um `await` point — adicionar `asyncio.Lock` por dominio no Dia 19+
+- `StorageService.save_items` envolve qualquer excecao como `StorageError`: um `KeyError` por chave ausente no `item.data` geraria mensagem confusa; adicionar validacao de campos antes da sessao de banco no Dia 19+
+
+## Proximo passo — Dia 19
