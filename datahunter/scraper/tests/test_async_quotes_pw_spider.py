@@ -93,7 +93,7 @@ async def test_max_concurrent_respected() -> None:
             ctx.close = dec_close  # type: ignore[method-assign]
             return ctx
 
-        client._browser.new_context = counting_new_context  # type: ignore[method-assign]
+        client._browser.new_context = counting_new_context  # type: ignore[method-assign,union-attr]
         client.add_route(
             "**/*", _router({_PAGE1_URL: _PAGE1, _PAGE2_URL: _PAGE2, _PAGE3_URL: _PAGE1})
         )

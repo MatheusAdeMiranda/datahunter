@@ -146,7 +146,7 @@ async def test_semaphore_limits_concurrent_contexts() -> None:
             ctx.close = counting_close  # type: ignore[method-assign]
             return ctx
 
-        client._browser.new_context = counting_new_context  # type: ignore[method-assign]
+        client._browser.new_context = counting_new_context  # type: ignore[method-assign,union-attr]
         client.add_route("**/*", _router({_PAGE1_URL: _PAGE1, _PAGE2_URL: _PAGE2}))
 
         sem = asyncio.Semaphore(1)
@@ -183,7 +183,7 @@ async def test_no_semaphore_allows_full_concurrency() -> None:
             ctx.close = counting_close  # type: ignore[method-assign]
             return ctx
 
-        client._browser.new_context = counting_new_context  # type: ignore[method-assign]
+        client._browser.new_context = counting_new_context  # type: ignore[method-assign,union-attr]
         client.add_route("**/*", _router({_PAGE1_URL: _PAGE1, _PAGE2_URL: _PAGE2}))
 
         urls = [_PAGE1_URL, _PAGE2_URL]
