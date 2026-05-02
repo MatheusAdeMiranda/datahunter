@@ -259,4 +259,39 @@ Quando nao ha endpoint JSON detectavel (dados embutidos no JS, WebSocket, canvas
 - `_wait_for_rate_limit` no `AsyncHTTPClient` nao e concurrency-safe: race condition entre check e update de `_last_request_time` em um `await` point — adicionar `asyncio.Lock` por dominio no Dia 19+
 - `StorageService.save_items` envolve qualquer excecao como `StorageError`: um `KeyError` por chave ausente no `item.data` geraria mensagem confusa; adicionar validacao de campos antes da sessao de banco no Dia 19+
 
-## Proximo passo — Dia 19
+## Modulos existentes (atualizado Dia 19)
+
+`scraper/app/storage/` — todos com mypy --strict passando:
+
+| Arquivo | Dia | O que tem |
+|---|---|---|
+| `models.py` | 11 | `Base`, `ScrapedBook` |
+| `service.py` | 11 | `StorageService` — sync, SQLite/PostgreSQL |
+| `async_service.py` | 19 | `AsyncStorageService` — `AsyncSession`, `await session.merge()`, `aiosqlite` para dev |
+
+`scraper/app/spiders/` — todos com mypy --strict passando:
+
+| Arquivo | Dia | O que tem |
+|---|---|---|
+| `books_spider.py` | 10–12 | `BooksSpider` — sync |
+| `quotes_spider.py` | 15 | `QuotesSpider` — JSON API |
+| `async_books_spider.py` | 19 | `AsyncBooksSpider` — producer-consumer com `asyncio.Queue`, `AsyncHTTPClient`, `AsyncStorageService` opcional |
+
+## Decisoes — Dia 19
+
+- `AsyncStorageService` usa `AsyncSession` com `await session.merge()` e `await session.commit()`: mesmo semantica de upsert do `StorageService` sincrono, mas nao bloqueia o event loop
+- `aiosqlite` como driver async para SQLite (dev): URL `sqlite+aiosqlite:///:memory:` nos testes, `sqlite+aiosqlite:///arquivo.db` em dev; producao usara `asyncpg` (Dia 25)
+- `await conn.run_sync(Base.metadata.create_all)` em `init_db()`: a criacao de schema e sincrona na SQLAlchemy — `run_sync` executa o callable bloqueante em um executor thread sem paralisar o event loop
+- Producer-consumer com `asyncio.Queue`: pagination e inerentemente serial (URL de cada pagina vem da anterior), mas o consumer pode processar/persistir a pagina N enquanto o producer esta aguardando o HTTP da pagina N+1 — a queue e o ponto de desacoplamento
+- Sentinel `None` para sinalizar fim da fila: padrao classico e legivel; alternativas (Event, CancelledError) sao mais complexas sem beneficio aqui
+- `asyncio.gather(producer(), consumer())` em vez de tarefas separadas: se o producer lancar excecao, o consumer e cancelado automaticamente (comportamento correto); nao e necessario `return_exceptions=True`
+- `AsyncStorageService` importado via `TYPE_CHECKING` na spider: mesma decisao do `StorageService` na `BooksSpider` — evita importacao circular em runtime
+
+## Dividas Tecnicas (atualizado Dia 19)
+
+- `_wait_for_rate_limit` no `HTTPClient` impoe intervalo minimo entre requests por dominio (nao janela deslizante): avaliar unificacao no Dia 20+
+- `_wait_for_rate_limit` no `AsyncHTTPClient` nao e concurrency-safe: race condition entre check e update de `_last_request_time` — adicionar `asyncio.Lock` por dominio
+- `StorageService.save_items` envolve qualquer excecao como `StorageError`: validacao de campos antes da sessao seria mais precisa — avaliar no Dia 20+
+- `_save_json` duplicada em `books_spider.py` e `async_books_spider.py`: extrair para `scraper/app/core/utils.py` ou modulo proprio no Dia 21+
+
+## Proximo passo — Dia 20
