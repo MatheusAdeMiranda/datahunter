@@ -457,4 +457,45 @@ Quando nao ha endpoint JSON detectavel (dados embutidos no JS, WebSocket, canvas
 - `_save_json` duplicada em `books_spider.py`, `async_books_spider.py` e `async_quotes_pw_spider.py`: extrair para `scraper/app/core/utils.py` no Dia 25+
 - `worker/app/jobs/scraping_jobs.py` nao persiste resultados no banco: retorna apenas um resumo `dict`; para persistir, injetar `StorageService` ou `AsyncStorageService` na task — avaliar no Dia 25+ junto com PostgreSQL
 
-## Proximo passo — Dia 25
+## Modulos existentes (atualizado Dia 25)
+
+`docker-compose.yml` — stack completo:
+
+| Servico | Porta | O que faz |
+|---|---|---|
+| `postgres` | 5432 | PostgreSQL 16-alpine; volume `postgres_data`; healthcheck `pg_isready` |
+| `redis` | 6379 | broker de filas e result backend; healthcheck `redis-cli ping` |
+| `worker` | — | Celery worker, `--concurrency=2`; depende de redis + postgres (ambos healthy) |
+| `beat` | — | Celery Beat com `PersistentScheduler`; depende de redis |
+| `flower` | 5555 | UI de monitoramento; depende de redis |
+
+`docker-compose.override.yml` — sobreposicoes de dev:
+- volume `.:/app` em todos os servicos de build: editar codigo sem rebuild
+- Celery em `--pool=solo --concurrency=1 --loglevel=debug`
+
+`Dockerfile` — multi-stage (builder + runtime):
+- **builder**: copia `pyproject.toml` + `uv.lock`, instala deps (`--no-dev`) com `UV_COMPILE_BYTECODE=1`; depois copia codigo e instala pacote local
+- **runtime**: copia apenas `.venv` + codigo do builder; sem uv, sem pip, sem caches — imagem menor e mais segura
+
+`.env.example` — documenta `POSTGRES_*`, `DATAHUNTER_*`, `LOG_LEVEL`
+
+## Decisoes — Dia 25
+
+- Dockerfile multi-stage: a layer de instalacao de deps (builder) e separada da layer de codigo — uma mudanca de arquivo Python nao invalida o cache de `uv sync`; o runtime so tem o necessario para executar
+- `UV_COMPILE_BYTECODE=1` no builder: pre-compila `.pyc` em tempo de build; o runtime nao precisa escrever `.pyc` em disco → `PYTHONDONTWRITEBYTECODE=1` no runtime e consistente com isso
+- `UV_LINK_MODE=copy`: hard-links nao funcionam entre layers do Docker (sistemas de arquivo diferentes); `copy` garante que o `.venv` no builder seja auto-contido e copiavel para o runtime
+- `target: runtime` no `docker-compose.yml`: instrui o `docker compose build` a parar no stage runtime (nao precisamos do builder em producao)
+- `depends_on: condition: service_healthy` para postgres: o worker nao sobe ate o postgres estar pronto para aceitar conexoes — evita o erro `FATAL: the database system is starting up` no primeiro `save_items`
+- `pg_isready` como healthcheck do postgres: built-in no proprio container PostgreSQL; mais confiavel que `nc -z` ou `curl` porque testa o protocolo de conexao real
+- `docker-compose.override.yml` carregado automaticamente: Docker Compose mescla `docker-compose.yml` + `override` sem flags extras em dev; em producao, usar `docker compose -f docker-compose.yml up` explicitamente
+- `_make_storage(database_url)` como funcao auxiliar: isolada e testavel com mock de `create_engine` e `StorageService` sem tocar no banco real; a task chama `_make_storage(db_url or settings.database_url)` — sem duplicacao de logica
+
+## Dividas Tecnicas (atualizado Dia 25)
+
+- `ExponentialBackoffRetryMiddleware._retry` usa `time.sleep`: bloqueia o reactor em crawls com alta concorrencia — avaliar se escala for necessaria
+- `_wait_for_rate_limit` no `HTTPClient` impoe intervalo minimo (nao janela deslizante): avaliar unificacao no Dia 26+
+- `_wait_for_rate_limit` no `AsyncHTTPClient` nao e concurrency-safe: race condition — adicionar `asyncio.Lock` por dominio
+- `_save_json` duplicada em `books_spider.py`, `async_books_spider.py` e `async_quotes_pw_spider.py`: extrair para `scraper/app/core/utils.py` no Dia 26+
+- `scrape_quotes` nao persiste: aguardando modelo `ScrapedQuote` (Dia 27+)
+
+## Proximo passo — Dia 26
