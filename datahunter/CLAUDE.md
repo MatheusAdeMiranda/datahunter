@@ -345,4 +345,49 @@ Quando nao ha endpoint JSON detectavel (dados embutidos no JS, WebSocket, canvas
 - `StorageService.save_items` envolve qualquer excecao como `StorageError`: validacao de campos antes da sessao seria mais precisa — avaliar no Dia 22+
 - `_save_json` duplicada em `books_spider.py`, `async_books_spider.py` e `async_quotes_pw_spider.py`: extrair para `scraper/app/core/utils.py` ou modulo proprio no Dia 22+
 
-## Proximo passo — Dia 22
+## Modulos existentes (atualizado Dia 22)
+
+`scraper/scrapy_project/` — projeto Scrapy (nao segue a estrutura `app/`; Scrapy exige layout proprio):
+
+| Arquivo | O que tem |
+|---|---|
+| `scrapy.cfg` | aponta para `scraper.scrapy_project.settings`; executar `scrapy crawl books` a partir de `datahunter/` |
+| `settings.py` | `USER_AGENT=datahunter/0.1`, `ROBOTSTXT_OBEY=True`, `DOWNLOAD_DELAY=0.5`, `AUTOTHROTTLE_ENABLED=True`, `StoragePipeline` ativo |
+| `items.py` | `BookItem` — campos: `title`, `price`, `availability`, `rating` |
+| `pipelines.py` | `StoragePipeline` — batch upsert via `StorageService` existente; `DropItem` em campo ausente |
+| `spiders/books_spider.py` | `BooksScrapySpider` — paginacao via `response.follow`, `_RATING_MAP` (palavra → numero) |
+
+## Decisoes — Dia 22
+
+- Projeto Scrapy em `scraper/scrapy_project/` (nao dentro de `scraper/app/`): Scrapy exige `scrapy.cfg` + modulo de settings apontado por ele; colocar dentro de `app/` quebraria o layout esperado pelo CLI do Scrapy
+- `scrapy.cfg` na raiz de `datahunter/`: o Scrapy procura o `scrapy.cfg` subindo a arvore de diretorios; com ele em `datahunter/`, `scrapy crawl books` funciona sem variavel de ambiente `SCRAPY_SETTINGS_MODULE`
+- `StoragePipeline` reutiliza `StorageService` do Dia 11 diretamente: sem duplicar logica de upsert; a pipeline recebe `DATABASE_URL` via `spider.settings.get()` — injetavel nos testes com `sqlite:///:memory:`
+- `DropItem` em campo ausente na pipeline: item com campo vazio geraria `KeyError` no `StorageService.save_items()`; melhor falhar cedo com mensagem clara
+- `close_spider` faz batch upsert (acumula na lista, persiste no fim): evita uma transacao por item durante o crawl; aceitavel porque `StorageService.save_items()` ja usa `session.merge()` em loop dentro de uma unica transacao
+- `*/scrapy_project/settings.py` adicionado ao `omit` do coverage: arquivo de configuracao pura — constantes atribuidas ao modulo; sem logica condicional testavel
+- `TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"` em settings: Scrapy 2.7+ exige declaracao explicita do reactor; o `AsyncioSelectorReactor` permite coexistir com `asyncio` caso o projeto use os dois no futuro
+
+## Comparativo — spider manual (Dia 10) vs Scrapy (Dia 22)
+
+| Feature | BooksSpider (httpx) | BooksScrapySpider |
+|---|---|---|
+| Deduplicacao de URL | `set[str]` manual | `DupeFilter` automatico |
+| Rate limiting | `_wait_for_rate_limit` manual | `DOWNLOAD_DELAY` + `AUTOTHROTTLE` |
+| Retry | `@retry` decorator | `RetryMiddleware` automatico |
+| robots.txt | `RobotsChecker` manual | `ROBOTSTXT_OBEY = True` |
+| Output multi-formato | `_save_json()` manual | `-o file.json/csv/xml` built-in |
+| Stats de crawl | logs manuais | `scrapy stats` automatico |
+| Debug interativo | — | `scrapy shell <url>` |
+| Integracao asyncio | nativa | via `AsyncioSelectorReactor` (complexo) |
+| Controle fino de headers | total | via middleware |
+
+**Quando NAO usar Scrapy:** APIs JSON simples (overhead do framework nao compensa), projetos asyncio-first onde misturar Twisted e asyncio adiciona complexidade, scraping pontual de um ou dois endpoints.
+
+## Dividas Tecnicas (atualizado Dia 22)
+
+- `_wait_for_rate_limit` no `HTTPClient` impoe intervalo minimo entre requests por dominio (nao janela deslizante): avaliar unificacao no Dia 23+
+- `_wait_for_rate_limit` no `AsyncHTTPClient` nao e concurrency-safe: race condition entre check e update de `_last_request_time` — adicionar `asyncio.Lock` por dominio
+- `StorageService.save_items` envolve qualquer excecao como `StorageError`: validacao de campos antes da sessao seria mais precisa — avaliar no Dia 23+
+- `_save_json` duplicada em `books_spider.py`, `async_books_spider.py` e `async_quotes_pw_spider.py`: extrair para `scraper/app/core/utils.py` no Dia 23+
+
+## Proximo passo — Dia 23
