@@ -330,4 +330,19 @@ Quando nao ha endpoint JSON detectavel (dados embutidos no JS, WebSocket, canvas
 - `StorageService.save_items` envolve qualquer excecao como `StorageError`: validacao de campos antes da sessao seria mais precisa — avaliar no Dia 21+
 - `_save_json` duplicada em `books_spider.py`, `async_books_spider.py` e `async_quotes_pw_spider.py`: extrair para `scraper/app/core/utils.py` ou modulo proprio no Dia 21+
 
-## Proximo passo — Dia 21
+## Decisoes — Dia 21
+
+- `--cov-fail-under=90` adicionado ao job `test` no CI: um PR que derruba a cobertura abaixo de 90% falha automaticamente — e a protecao concreta da main; threshold foi 90 (nao 100) para dar margem a entrypoints e codigo de inicializacao do worker que nao sao testáveis como unidade sem overhead desproporcional
+- `--cov-report=xml` adicionado junto: gera `coverage.xml` para integracao futura com Codecov ou badge no README (Dia 28+)
+- lint e typecheck rodam so em Python 3.12: ruff e agnóstico de versao; mypy usa `python_version = "3.12"` no pyproject.toml — apenas o job `test` precisa da matrix 3.11/3.12 para garantir compatibilidade de runtime
+- squash merge na main (confirma e documenta decisao existente): um commit por PR no historico da main; commits intermediarios ficam na branch e no squash message — `git log --oneline` na main conta a historia do produto, nao os passos de desenvolvimento; rebase merge manteria todos os commits mas polui o historico; merge commit cria um commit extra vazio de merge
+- `git bisect`: ferramenta para encontrar qual commit introduziu um bug em O(log n) passos — `git bisect start`, `git bisect bad HEAD`, `git bisect good <hash-bom>` e o Git faz checkout automatico para o commit do meio; util quando um teste falha na main mas nao se sabe em qual dos N commits o problema entrou; nao requer configuracao de arquivo
+
+## Dividas Tecnicas (atualizado Dia 21)
+
+- `_wait_for_rate_limit` no `HTTPClient` impoe intervalo minimo entre requests por dominio (nao janela deslizante): avaliar unificacao no Dia 22+
+- `_wait_for_rate_limit` no `AsyncHTTPClient` nao e concurrency-safe: race condition entre check e update de `_last_request_time` — adicionar `asyncio.Lock` por dominio
+- `StorageService.save_items` envolve qualquer excecao como `StorageError`: validacao de campos antes da sessao seria mais precisa — avaliar no Dia 22+
+- `_save_json` duplicada em `books_spider.py`, `async_books_spider.py` e `async_quotes_pw_spider.py`: extrair para `scraper/app/core/utils.py` ou modulo proprio no Dia 22+
+
+## Proximo passo — Dia 22
