@@ -390,4 +390,38 @@ Quando nao ha endpoint JSON detectavel (dados embutidos no JS, WebSocket, canvas
 - `StorageService.save_items` envolve qualquer excecao como `StorageError`: validacao de campos antes da sessao seria mais precisa — avaliar no Dia 23+
 - `_save_json` duplicada em `books_spider.py`, `async_books_spider.py` e `async_quotes_pw_spider.py`: extrair para `scraper/app/core/utils.py` no Dia 23+
 
-## Proximo passo — Dia 23
+## Modulos existentes (atualizado Dia 23)
+
+`scraper/scrapy_project/middlewares/` — middlewares customizados:
+
+| Arquivo | O que tem |
+|---|---|
+| `retry.py` | `ExponentialBackoffRetryMiddleware` — substitui `RetryMiddleware` padrao; wait = `backoff_base * 2^attempt`; testavel via `patch("time.sleep")` |
+| `user_agent.py` | `RandomUserAgentMiddleware` — substitui `UserAgentMiddleware` padrao; rotaciona `USER_AGENT_LIST` das settings; fallback para `USER_AGENT` |
+
+`scraper/scrapy_project/spiders/` — spiders Scrapy:
+
+| Arquivo | O que tem |
+|---|---|
+| `books_spider.py` | `BooksScrapySpider` — Dia 22 |
+| `quotes_spider.py` | `QuotesScrapySpider` — usa scrapy-playwright (`meta={"playwright": True}`); `_parse_quote(Any)` isolado como static method |
+
+`scraper/scrapy_project/items.py` — `BookItem` + `QuoteItem` (text, author, tags CSV)
+
+## Decisoes — Dia 23
+
+- `ExponentialBackoffRetryMiddleware` usa `time.sleep` (bloqueia reactor do Twisted): para concorrencia 1 por dominio e volume baixo, o custo e aceitavel; a alternativa correta seria `reactor.callLater` + `Deferred` (Twisted-idiomatic) mas adiciona complexidade desproporcional ao projeto atual
+- Prioridade 200 para retry e 150 para user-agent: mesmas slots dos middlewares padrao que substituem — `settings.py` desabilita os originais com `None` antes de registrar os nossos
+- `_parse_quote(selector: Any)`: parsel (biblioteca interna do Scrapy) e scrapy.Selector sao o mesmo tipo em runtime mas as stubs mypy enxergam caminho de modulo diferente; `Any` evita o falso positivo sem perder seguranca de tipo no resto do metodo
+- `QuotesScrapySpider.parse` e async generator (yield dentro de async def): Scrapy aceita porque o `ScrapyPlaywrightDownloadHandler` chama `async for` na coroutine; `start_requests` e sync generator normal (nao async) — retorna `Iterator[Request]`
+- `AsyncMock` cobre os branches `if page:` em `parse`: `page.wait_for_selector` e `page.close` sao chamadas reais do Playwright; testar com `AsyncMock` confirma que sao invocadas sem precisar de browser real
+- `DOWNLOAD_HANDLERS` com `ScrapyPlaywrightDownloadHandler` em settings: requests sem `meta={"playwright": True}` passam pelo handler mas nao abrem browser — o handler so inicializa o Playwright na primeira request playwright; nao afeta os testes unitarios que usam `HtmlResponse` diretamente
+
+## Dividas Tecnicas (atualizado Dia 23)
+
+- `ExponentialBackoffRetryMiddleware._retry` usa `time.sleep`: bloqueia o reactor em crawls com alta concorrencia; fix correto usa `reactor.callLater` + Deferred — avaliar se escala for necessaria
+- `_wait_for_rate_limit` no `HTTPClient` impoe intervalo minimo (nao janela deslizante): avaliar unificacao no Dia 24+
+- `_wait_for_rate_limit` no `AsyncHTTPClient` nao e concurrency-safe: race condition — adicionar `asyncio.Lock` por dominio
+- `_save_json` duplicada em `books_spider.py`, `async_books_spider.py` e `async_quotes_pw_spider.py`: extrair para `scraper/app/core/utils.py` no Dia 24+
+
+## Proximo passo — Dia 24

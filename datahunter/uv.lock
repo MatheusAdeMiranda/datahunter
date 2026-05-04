@@ -549,6 +549,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "scrapy" },
+    { name = "scrapy-playwright" },
     { name = "sqlalchemy" },
     { name = "structlog" },
 ]
@@ -595,6 +596,7 @@ requires-dist = [
     { name = "redis", marker = "extra == 'worker'", specifier = ">=5.0" },
     { name = "scrapy", specifier = ">=2.15.0" },
     { name = "scrapy", marker = "extra == 'scraping'", specifier = ">=2.11" },
+    { name = "scrapy-playwright", specifier = ">=0.0.46" },
     { name = "sqlalchemy", specifier = ">=2.0" },
     { name = "structlog", specifier = ">=24.0" },
 ]
@@ -1644,6 +1646,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/b8/7b/48608f18bd0fe3a51124fe14cb48690dc0768aea52e66faf632467940509/scrapy-2.15.0.tar.gz", hash = "sha256:8072b42da2b54ccafaf188298c8da851197e83f6d4a19db324777ee2e204b70c", size = 1290115, upload-time = "2026-04-09T12:02:11.92Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d4/f1/88c440a6b5a331e0f11d1d45442ae538bc52a26828bbe9755abff00afa48/scrapy-2.15.0-py3-none-any.whl", hash = "sha256:7d7a421fb75711c096cf8ad8b3d5090a4fc403e04abe4d38f86d612666fe07ac", size = 352486, upload-time = "2026-04-09T12:02:09.99Z" },
+]
+
+[[package]]
+name = "scrapy-playwright"
+version = "0.0.46"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "playwright" },
+    { name = "scrapy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/cb/bc/12435db52dcb0cb33698e499b35411fc2553bcddf228291083a2019036d4/scrapy_playwright-0.0.46.tar.gz", hash = "sha256:2efe31155b2bbbd13fb011f3c189c21a6f34409c7f7b958881780509ce14a6bb", size = 48429, upload-time = "2026-01-21T12:11:16.653Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1d/6f/33fb13206fa4b93450484592cb5dbd243516b4ca63cf2ef1f641b51c3ca0/scrapy_playwright-0.0.46-py3-none-any.whl", hash = "sha256:8b20c504d773ec744ae81f5383989d04ba01dbf5e6c1991c0816e2f877398c54", size = 27749, upload-time = "2026-01-21T12:11:15.508Z" },
 ]
 
 [[package]]
