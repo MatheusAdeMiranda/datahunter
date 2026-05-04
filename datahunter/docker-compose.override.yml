@@ -1,0 +1,44 @@
+# docker-compose.override.yml — sobrescreve docker-compose.yml SOMENTE em dev
+#
+# Esse arquivo eh carregado automaticamente pelo Docker Compose quando existe.
+# Em producao ele nao deve existir (ou usar --file explicitamente).
+#
+# O que muda em dev:
+#   - codigo-fonte montado como volume: editar e testar sem rebuild
+#   - Celery em modo solo (1 processo, stack trace completo)
+#   - variaveis de debug ativas
+
+services:
+  worker:
+    # Monta o codigo local diretamente no container:
+    # qualquer mudanca em Python eh visivel sem `docker compose build`
+    volumes:
+      - .:/app
+    command: >
+      celery -A worker.app.main worker
+      --loglevel=debug
+      --concurrency=1
+      --pool=solo
+    environment:
+      DATAHUNTER_REDIS_URL: redis://redis:6379/0
+      DATAHUNTER_DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-datahunter}:${POSTGRES_PASSWORD:-datahunter}@postgres:5432/${POSTGRES_DB:-datahunter}
+
+  beat:
+    volumes:
+      - .:/app
+    command: >
+      celery -A worker.app.main beat
+      --loglevel=debug
+
+  flower:
+    volumes:
+      - .:/app
+
+  postgres:
+    # Expoe porta local mesmo em dev para inspecao com psql / DBeaver
+    ports:
+      - "5432:5432"
+
+  redis:
+    ports:
+      - "6379:6379"

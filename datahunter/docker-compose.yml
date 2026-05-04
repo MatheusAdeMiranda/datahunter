@@ -1,4 +1,24 @@
 services:
+  # ---------------------------------------------------------------------------
+  # Infraestrutura
+  # ---------------------------------------------------------------------------
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-datahunter}
+      POSTGRES_USER: ${POSTGRES_USER:-datahunter}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-datahunter}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-datahunter} -d ${POSTGRES_DB:-datahunter}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   redis:
     image: redis:7-alpine
     ports:
@@ -9,25 +29,42 @@ services:
       timeout: 3s
       retries: 5
 
+  # ---------------------------------------------------------------------------
+  # Celery worker: executa tasks de scraping
+  # ---------------------------------------------------------------------------
+
   worker:
-    build: .
+    build:
+      context: .
+      target: runtime
     command: >
-      uv run celery -A worker.app.main worker
+      celery -A worker.app.main worker
       --loglevel=info
       --concurrency=2
+    env_file: .env
     environment:
       DATAHUNTER_REDIS_URL: redis://redis:6379/0
+      DATAHUNTER_DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-datahunter}:${POSTGRES_PASSWORD:-datahunter}@postgres:5432/${POSTGRES_DB:-datahunter}
     depends_on:
       redis:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
     restart: on-failure
+
+  # ---------------------------------------------------------------------------
+  # Celery Beat: agendamento periodico (separado do worker por seguranca)
+  # ---------------------------------------------------------------------------
 
   beat:
-    build: .
+    build:
+      context: .
+      target: runtime
     command: >
-      uv run celery -A worker.app.main beat
+      celery -A worker.app.main beat
       --loglevel=info
       --scheduler celery.beat:PersistentScheduler
+    env_file: .env
     environment:
       DATAHUNTER_REDIS_URL: redis://redis:6379/0
     depends_on:
@@ -35,16 +72,26 @@ services:
         condition: service_healthy
     restart: on-failure
 
+  # ---------------------------------------------------------------------------
+  # Flower: monitoramento de tasks em tempo real
+  # ---------------------------------------------------------------------------
+
   flower:
-    build: .
+    build:
+      context: .
+      target: runtime
     command: >
-      uv run celery -A worker.app.main flower
+      celery -A worker.app.main flower
       --port=5555
     ports:
       - "5555:5555"
+    env_file: .env
     environment:
       DATAHUNTER_REDIS_URL: redis://redis:6379/0
     depends_on:
       redis:
         condition: service_healthy
     restart: on-failure
+
+volumes:
+  postgres_data:
