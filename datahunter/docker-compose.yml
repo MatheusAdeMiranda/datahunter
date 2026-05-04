@@ -1,0 +1,50 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  worker:
+    build: .
+    command: >
+      uv run celery -A worker.app.main worker
+      --loglevel=info
+      --concurrency=2
+    environment:
+      DATAHUNTER_REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: on-failure
+
+  beat:
+    build: .
+    command: >
+      uv run celery -A worker.app.main beat
+      --loglevel=info
+      --scheduler celery.beat:PersistentScheduler
+    environment:
+      DATAHUNTER_REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: on-failure
+
+  flower:
+    build: .
+    command: >
+      uv run celery -A worker.app.main flower
+      --port=5555
+    ports:
+      - "5555:5555"
+    environment:
+      DATAHUNTER_REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: on-failure
