@@ -16,6 +16,9 @@ dependencies = [
     "aiosqlite>=0.22.1",
     "scrapy>=2.15.0",
     "scrapy-playwright>=0.0.46",
+    "celery>=5.4",
+    "redis>=5.0",
+    "flower>=2.0",
 ]
 
 [project.optional-dependencies]

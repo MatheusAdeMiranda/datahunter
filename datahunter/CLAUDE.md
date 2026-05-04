@@ -417,11 +417,44 @@ Quando nao ha endpoint JSON detectavel (dados embutidos no JS, WebSocket, canvas
 - `AsyncMock` cobre os branches `if page:` em `parse`: `page.wait_for_selector` e `page.close` sao chamadas reais do Playwright; testar com `AsyncMock` confirma que sao invocadas sem precisar de browser real
 - `DOWNLOAD_HANDLERS` com `ScrapyPlaywrightDownloadHandler` em settings: requests sem `meta={"playwright": True}` passam pelo handler mas nao abrem browser — o handler so inicializa o Playwright na primeira request playwright; nao afeta os testes unitarios que usam `HtmlResponse` diretamente
 
-## Dividas Tecnicas (atualizado Dia 23)
+## Modulos existentes (atualizado Dia 24)
+
+`worker/app/` — Celery worker:
+
+| Arquivo | O que tem |
+|---|---|
+| `config.py` | `WorkerSettings` (pydantic-settings) — le `DATAHUNTER_REDIS_URL` e `DATAHUNTER_SCRAPING_INTERVAL_SECONDS` do ambiente |
+| `main.py` | app Celery com broker/backend Redis; Beat schedule para `scrape_books` e `scrape_quotes` a cada hora |
+| `jobs/scraping_jobs.py` | `scrape_books` e `scrape_quotes` — tasks com `autoretry_for=(NetworkError, ConnectionError, TimeoutError)`, `retry_backoff=True`, `max_retries=3` |
+
+`docker-compose.yml` — servicos:
+
+| Servico | Porta | O que faz |
+|---|---|---|
+| `redis` | 6379 | broker de filas e result backend; healthcheck com `redis-cli ping` |
+| `worker` | — | Celery worker, `--concurrency=2`, reinicia em falha |
+| `beat` | — | Celery Beat com `PersistentScheduler`; dispara as tasks agendadas |
+| `flower` | 5555 | UI de monitoramento de tasks em tempo real |
+
+`Dockerfile` — imagem uv-based para worker e flower
+
+## Decisoes — Dia 24
+
+- `autoretry_for=(NetworkError, ConnectionError, TimeoutError)` nas tasks: as tres excecoes cobrem falhas de rede (nossa excecao customizada) e falhas de transporte (stdlib) — sem retentativa em `ParseError` (bug de parsing nao se resolve sozinho)
+- `retry_backoff=True` + `retry_backoff_max=300` + `retry_jitter=True`: backoff exponencial com cap de 5 minutos e jitter para evitar thundering herd quando multiplos workers falham ao mesmo tempo
+- `task_always_eager=True` nos testes: executa a task sincronamente sem broker real — evita dependencia de Redis nos testes de CI; `task_eager_propagates=True` propaga excecoes em vez de engoli-las
+- `celery.exceptions.Retry` em vez de excecao original em modo eager: quando `autoretry_for` dispara em modo eager, Celery levanta `Retry` (nao a excecao original) — o teste correto e verificar que `Retry` foi levantado, confirmando que o mecanismo de reenvio foi acionado
+- `WorkerSettings` com `env_prefix = "DATAHUNTER_"`: prefixo evita colisao com variáveis de ambiente de outras ferramentas no mesmo host; `DATAHUNTER_REDIS_URL=redis://redis:6379/0` no compose
+- `beat_schedule` no `app.conf` (nao em arquivo separado): simples para o volume atual; `PersistentScheduler` persiste o ultimo horario de execucao em `celerybeat-schedule` — evita execucao dupla ao reiniciar o servico beat
+- Beat como servico separado do worker no compose: padrao recomendado pelo Celery; rodar beat e worker no mesmo processo e deprecated desde Celery 4 e proibido em producao (risco de execucao duplicada)
+- Dockerfile com `uv sync --frozen` em dois passos (deps primeiro, codigo depois): maximiza o cache da layer do Docker — mudancas no codigo do projeto nao invalidam a layer de instalacao de dependencias
+
+## Dividas Tecnicas (atualizado Dia 24)
 
 - `ExponentialBackoffRetryMiddleware._retry` usa `time.sleep`: bloqueia o reactor em crawls com alta concorrencia; fix correto usa `reactor.callLater` + Deferred — avaliar se escala for necessaria
-- `_wait_for_rate_limit` no `HTTPClient` impoe intervalo minimo (nao janela deslizante): avaliar unificacao no Dia 24+
+- `_wait_for_rate_limit` no `HTTPClient` impoe intervalo minimo (nao janela deslizante): avaliar unificacao no Dia 25+
 - `_wait_for_rate_limit` no `AsyncHTTPClient` nao e concurrency-safe: race condition — adicionar `asyncio.Lock` por dominio
-- `_save_json` duplicada em `books_spider.py`, `async_books_spider.py` e `async_quotes_pw_spider.py`: extrair para `scraper/app/core/utils.py` no Dia 24+
+- `_save_json` duplicada em `books_spider.py`, `async_books_spider.py` e `async_quotes_pw_spider.py`: extrair para `scraper/app/core/utils.py` no Dia 25+
+- `worker/app/jobs/scraping_jobs.py` nao persiste resultados no banco: retorna apenas um resumo `dict`; para persistir, injetar `StorageService` ou `AsyncStorageService` na task — avaliar no Dia 25+ junto com PostgreSQL
 
-## Proximo passo — Dia 24
+## Proximo passo — Dia 25
