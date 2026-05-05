@@ -19,9 +19,7 @@ def test_configure_logging_adds_processor_formatter_handler() -> None:
     configure_logging("INFO")
     root = logging.getLogger()
     formatters = [h.formatter for h in root.handlers]
-    assert any(
-        isinstance(f, structlog.stdlib.ProcessorFormatter) for f in formatters
-    )
+    assert any(isinstance(f, structlog.stdlib.ProcessorFormatter) for f in formatters)
 
 
 def test_configure_logging_idempotent() -> None:
@@ -64,8 +62,7 @@ def test_job_context_clears_after_exit() -> None:
 
 def test_job_context_clears_even_on_exception() -> None:
     structlog.contextvars.clear_contextvars()
-    with pytest.raises(RuntimeError):
-        with job_context("job-err"):
-            raise RuntimeError("boom")
+    with pytest.raises(RuntimeError), job_context("job-err"):
+        raise RuntimeError("boom")
     ctx = structlog.contextvars.get_contextvars()
     assert "job_id" not in ctx

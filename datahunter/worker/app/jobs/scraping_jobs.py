@@ -69,16 +69,12 @@ def scrape_books(
         )
         client = HTTPClient(requests_per_second=2.0)
         storage = _make_storage(db_url)
-        spider = BooksSpider(
-            client=client, base_url=start_url, output_path=None, storage=storage
-        )
+        spider = BooksSpider(client=client, base_url=start_url, output_path=None, storage=storage)
         result = spider.crawl()
 
         pages_scraped_total.labels(spider="books").inc(len(result.items))
         if result.errors:
-            scraping_errors_total.labels(spider="books", error_type="parse").inc(
-                len(result.errors)
-            )
+            scraping_errors_total.labels(spider="books", error_type="parse").inc(len(result.errors))
 
         summary: dict[str, Any] = {
             "items": len(result.items),
@@ -114,9 +110,7 @@ def scrape_quotes(self: Any, api_url: str = _QUOTES_API_URL) -> dict[str, Any]:
     structlog.contextvars.bind_contextvars(job_id=job_id, spider="quotes")
     t0 = time.monotonic()
     try:
-        logger.info(
-            "scrape_quotes iniciado: url=%s tentativa=%d", api_url, self.request.retries
-        )
+        logger.info("scrape_quotes iniciado: url=%s tentativa=%d", api_url, self.request.retries)
         client = HTTPClient(requests_per_second=2.0)
         spider = QuotesSpider(client=client, api_url=api_url, output_path=None)
         result = spider.crawl()

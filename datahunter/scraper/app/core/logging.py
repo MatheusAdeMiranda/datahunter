@@ -50,9 +50,7 @@ def configure_logging(log_level: str = "INFO") -> None:
 
     root = logging.getLogger()
     # Evita duplicar handler se configure_logging for chamada mais de uma vez
-    if not any(
-        isinstance(h.formatter, structlog.stdlib.ProcessorFormatter) for h in root.handlers
-    ):
+    if not any(isinstance(h.formatter, structlog.stdlib.ProcessorFormatter) for h in root.handlers):
         root.addHandler(handler)
     root.setLevel(getattr(logging, log_level.upper(), logging.INFO))
 

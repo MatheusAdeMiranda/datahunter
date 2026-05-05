@@ -9,7 +9,6 @@ import pytest
 from worker.app.config import settings
 from worker.app.signals import on_task_failure, on_worker_process_init, on_worker_ready
 
-
 # ---------------------------------------------------------------------------
 # on_worker_process_init
 # ---------------------------------------------------------------------------
@@ -48,9 +47,7 @@ def _make_sender(name: str = "my_task") -> Any:
 def test_on_task_failure_skips_when_no_webhook_url(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "webhook_url", None)
     with patch("worker.app.signals.httpx.post") as mock_post:
-        on_task_failure(
-            task_id="abc", exception=ValueError("boom"), sender=_make_sender()
-        )
+        on_task_failure(task_id="abc", exception=ValueError("boom"), sender=_make_sender())
     mock_post.assert_not_called()
 
 
@@ -74,9 +71,7 @@ def test_on_task_failure_posts_to_webhook(monkeypatch: pytest.MonkeyPatch) -> No
 def test_on_task_failure_uses_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "webhook_url", "http://example.com/hook")
     with patch("worker.app.signals.httpx.post") as mock_post:
-        on_task_failure(
-            task_id="t1", exception=ValueError("x"), sender=_make_sender()
-        )
+        on_task_failure(task_id="t1", exception=ValueError("x"), sender=_make_sender())
     _, call_kwargs = mock_post.call_args
     assert call_kwargs["timeout"] == 5.0
 
@@ -100,8 +95,6 @@ def test_on_task_failure_handles_sender_without_name(
     monkeypatch.setattr(settings, "webhook_url", "http://example.com/hook")
     sender_without_name = object()  # nao tem atributo .name
     with patch("worker.app.signals.httpx.post") as mock_post:
-        on_task_failure(
-            task_id="t3", exception=ValueError("z"), sender=sender_without_name
-        )
+        on_task_failure(task_id="t3", exception=ValueError("z"), sender=sender_without_name)
     _, call_kwargs = mock_post.call_args
     assert "task" in call_kwargs["json"]
