@@ -139,6 +139,15 @@ def test_make_storage_creates_service_with_sqlite() -> None:
 # ---------------------------------------------------------------------------
 
 
+def test_scrape_quotes_reports_crawl_errors() -> None:
+    result = _make_result(n_items=0, errors=["NetworkError on page 2"])
+    with patch("worker.app.jobs.scraping_jobs.QuotesSpider") as MockSpider:
+        MockSpider.return_value.crawl.return_value = result
+        outcome: Any = scrape_quotes.apply(args=[]).get()
+    assert outcome["errors"] == 1
+    assert "NetworkError on page 2" in outcome["error_details"]
+
+
 def test_scrape_quotes_returns_summary() -> None:
     result = _make_result(n_items=10)
     with patch("worker.app.jobs.scraping_jobs.QuotesSpider") as MockSpider:
