@@ -498,4 +498,46 @@ Quando nao ha endpoint JSON detectavel (dados embutidos no JS, WebSocket, canvas
 - `_save_json` duplicada em `books_spider.py`, `async_books_spider.py` e `async_quotes_pw_spider.py`: extrair para `scraper/app/core/utils.py` no Dia 26+
 - `scrape_quotes` nao persiste: aguardando modelo `ScrapedQuote` (Dia 27+)
 
-## Proximo passo — Dia 26
+## Modulos existentes (atualizado Dia 26)
+
+`scraper/app/core/` — todos com mypy --strict passando:
+
+| Arquivo | Dia | O que tem |
+|---|---|---|
+| `logging.py` | 26 | `configure_logging()` — structlog JSON via bridge stdlib; `get_logger()` — BoundLogger tipado; `job_context()` — context manager que associa `job_id` a todos os logs do bloco via contextvars |
+| `metrics.py` | 26 | `METRICS_REGISTRY` (CollectorRegistry isolado), `pages_scraped_total` (Counter), `scraping_errors_total` (Counter com label `error_type`), `scraping_duration_seconds` (Histogram) |
+
+`worker/app/` — sinais Celery e observabilidade:
+
+| Arquivo | Dia | O que tem |
+|---|---|---|
+| `signals.py` | 26 | `on_worker_process_init` → `configure_logging()`; `on_worker_ready` → `start_http_server(metrics_port)`; `on_task_failure` → POST webhook se `DATAHUNTER_WEBHOOK_URL` configurada |
+
+Infraestrutura adicionada ao compose:
+
+| Serviço | Porta | O que faz |
+|---|---|---|
+| `prometheus` | 9090 | Coleta métricas do worker em `worker:8001/metrics` a cada 15s |
+| `grafana` | 3000 | Visualização; datasource Prometheus provisionado automaticamente via `grafana/datasources/` |
+
+## Decisoes — Dia 26
+
+- `structlog` com bridge para stdlib (`ProcessorFormatter`): todos os 20+ módulos existentes que usam `logging.getLogger(__name__)` passam a emitir JSON automaticamente — sem tocar em nenhum arquivo de produção existente; o bridge é registrado uma vez no `configure_logging()`
+- `configure_logging()` chamada no sinal `worker_process_init` (não no import de `main.py`): `main.py` é importado em testes (`from worker.app.main import app`); se configurasse o logging no nível de import, pytest perderia controle sobre captura de logs e cada test run adicionaria um handler ao root logger
+- `on_worker_ready` sobe o servidor de métricas Prometheus: o sinal só dispara quando o worker está pronto para aceitar tasks — garante que o processo está estável antes de abrir a porta HTTP; `worker_process_init` dispara antes (por processo, não por worker)
+- `METRICS_REGISTRY` isolado do `REGISTRY` global do prometheus_client: o REGISTRY global acumula métricas permanentemente entre imports; em testes onde o módulo é importado uma única vez (cache Python), o registry global causaria `Duplicated timeseries` se `Counter(...)` fosse chamado mais de uma vez (ex.: múltiplos runs de pytest no mesmo processo)
+- `on_task_failure` usa `task_failure` do Celery (não `task_retry`): `task_failure` só dispara quando a task esgota todas as retentativas e falha definitivamente — é o momento certo para alertar; `task_retry` dispararia em cada tentativa intermediária, causando ruído
+- `job_id = self.request.id or "eager"`: em modo `task_always_eager=True` (testes), Celery ainda atribui um ID; o fallback `"eager"` é apenas uma garantia defensiva para modo muito bare-bones
+- `structlog.contextvars.clear_contextvars()` no `finally` de cada task: garante que o contexto `job_id` não vaze para a próxima task executada no mesmo processo (Celery reutiliza processos)
+- Grafana com provisioning via `grafana/datasources/prometheus.yml`: datasource Prometheus configurado automaticamente na primeira subida — zero cliques manuais no UI; `isDefault: true` o torna datasource padrão em novos painéis
+
+## Dividas Tecnicas (atualizado Dia 26)
+
+- `ExponentialBackoffRetryMiddleware._retry` usa `time.sleep`: bloqueia o reactor — avaliar se escala for necessaria
+- `_wait_for_rate_limit` no `HTTPClient` impoe intervalo minimo (nao janela deslizante): avaliar unificacao no Dia 27+
+- `_wait_for_rate_limit` no `AsyncHTTPClient` nao e concurrency-safe: race condition — adicionar `asyncio.Lock` por dominio
+- `_save_json` duplicada em `books_spider.py`, `async_books_spider.py` e `async_quotes_pw_spider.py`: extrair para `scraper/app/core/utils.py` no Dia 27+
+- `scrape_quotes` nao persiste: aguardando modelo `ScrapedQuote` (Dia 27+)
+- Grafana sem dashboard provisionado: apenas datasource configurado — painéis de `pages_scraped_total`, `scraping_errors_total` e `scraping_duration_seconds` podem ser criados manualmente ou provisionados via `grafana/dashboards/` (Dia 29+)
+
+## Proximo passo — Dia 27

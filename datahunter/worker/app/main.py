@@ -8,7 +8,7 @@ app = Celery(
     "datahunter",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["worker.app.jobs.scraping_jobs"],
+    include=["worker.app.jobs.scraping_jobs", "worker.app.signals"],
 )
 
 app.conf.update(
