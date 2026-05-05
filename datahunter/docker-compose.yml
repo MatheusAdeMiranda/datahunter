@@ -93,5 +93,35 @@ services:
         condition: service_healthy
     restart: on-failure
 
+  # ---------------------------------------------------------------------------
+  # Prometheus: coleta métricas do worker (porta 8001)
+  # ---------------------------------------------------------------------------
+
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    restart: on-failure
+
+  # ---------------------------------------------------------------------------
+  # Grafana: visualização de métricas (usuário admin / senha: GRAFANA_ADMIN_PASSWORD)
+  # ---------------------------------------------------------------------------
+
+  grafana:
+    image: grafana/grafana:10.4.0
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-datahunter}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on:
+      - prometheus
+    restart: on-failure
+
 volumes:
   postgres_data:
+  grafana_data:

@@ -19,6 +19,7 @@ dependencies = [
     "celery>=5.4",
     "redis>=5.0",
     "flower>=2.0",
+    "prometheus-client>=0.20",
 ]
 
 [project.optional-dependencies]
