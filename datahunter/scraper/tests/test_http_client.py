@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from unittest.mock import call, patch
+from unittest.mock import MagicMock, call, patch
 
 import httpx
 import pytest
 import respx
 
-from scraper.app.core.exceptions import NetworkError
+from scraper.app.core.exceptions import NetworkError, RobotsDisallowedError
 from scraper.app.core.http_client import RETRYABLE_STATUS_CODES, HTTPClient
+from scraper.app.core.robots import RobotsChecker
 from scraper.app.core.utils import _DEFAULT_HEADERS
 
 URL = "https://example.com/page"
@@ -266,3 +267,41 @@ def test_no_rate_limit_when_requests_per_second_is_none() -> None:
         client.get(URL + "/2")
 
     mock_sleep.assert_not_called()
+
+
+# ── Robots checker ────────────────────────────────────────────────────────────
+
+
+@respx.mock
+def test_robots_checker_allows_request_when_permitted() -> None:
+    respx.get(URL).mock(return_value=httpx.Response(200, text="ok"))
+    checker = MagicMock(spec=RobotsChecker)
+    checker.is_allowed.return_value = True
+
+    with HTTPClient(robots_checker=checker) as client:
+        response = client.get(URL)
+
+    assert response.status_code == 200
+    checker.is_allowed.assert_called_once_with(URL)
+
+
+@respx.mock
+def test_robots_checker_raises_disallowed_error_without_making_request() -> None:
+    checker = MagicMock(spec=RobotsChecker)
+    checker.is_allowed.return_value = False
+
+    with HTTPClient(robots_checker=checker) as client, pytest.raises(RobotsDisallowedError):
+        client.get(URL)
+
+    # No HTTP request should have been made.
+    assert len(respx.calls) == 0
+
+
+@respx.mock
+def test_no_robots_check_when_checker_is_none() -> None:
+    respx.get(URL).mock(return_value=httpx.Response(200))
+
+    with HTTPClient(robots_checker=None) as client:
+        response = client.get(URL)
+
+    assert response.status_code == 200

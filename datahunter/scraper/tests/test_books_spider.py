@@ -192,15 +192,12 @@ def test_items_contain_expected_book_fields() -> None:
 
 @respx.mock
 def test_robots_checker_stops_crawl_when_disallowed() -> None:
-    respx.get(PAGE1_URL).mock(return_value=httpx.Response(200, text=_page("books_page1.html")))
-
+    # RobotsChecker is now on HTTPClient; no HTTP request is made when blocked.
     checker = MagicMock(spec=RobotsChecker)
     checker.is_allowed.return_value = False
 
-    with HTTPClient() as client:
-        result = BooksSpider(
-            client, base_url=PAGE1_URL, output_path=None, robots_checker=checker
-        ).crawl()
+    with HTTPClient(robots_checker=checker) as client:
+        result = BooksSpider(client, base_url=PAGE1_URL, output_path=None).crawl()
 
     assert len(result) == 0
     assert result.errors == []
@@ -214,10 +211,8 @@ def test_robots_checker_allows_crawl_when_permitted() -> None:
     checker = MagicMock(spec=RobotsChecker)
     checker.is_allowed.return_value = True
 
-    with HTTPClient() as client:
-        result = BooksSpider(
-            client, base_url=PAGE1_URL, output_path=None, robots_checker=checker
-        ).crawl()
+    with HTTPClient(robots_checker=checker) as client:
+        result = BooksSpider(client, base_url=PAGE1_URL, output_path=None).crawl()
 
     assert len(result) == 2
     assert result.errors == []

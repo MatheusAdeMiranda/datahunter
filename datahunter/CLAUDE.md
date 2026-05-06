@@ -540,4 +540,56 @@ Infraestrutura adicionada ao compose:
 - `scrape_quotes` nao persiste: aguardando modelo `ScrapedQuote` (Dia 27+)
 - Grafana sem dashboard provisionado: apenas datasource configurado — painéis de `pages_scraped_total`, `scraping_errors_total` e `scraping_duration_seconds` podem ser criados manualmente ou provisionados via `grafana/dashboards/` (Dia 29+)
 
-## Proximo passo — Dia 27
+## Modulos existentes (atualizado Dia 27)
+
+`scraper/app/core/` — todos com mypy --strict passando:
+
+| Arquivo | Dia | O que tem |
+|---|---|---|
+| `settings.py` | 27 | `ScraperSettings` — pydantic-settings, prefixo `DATAHUNTER_`, validacao de `requests_per_second`, `max_retries`, `log_level` |
+| `exceptions.py` | 27 | `RobotsDisallowedError` adicionado — levantado pelo `HTTPClient` quando `RobotsChecker` barra o URL |
+| `http_client.py` | 27 | `robots_checker: RobotsChecker | None` — verifica `is_allowed(url)` antes de qualquer requisicao; import via `TYPE_CHECKING` para evitar circular |
+
+Refactoring do Dia 27:
+
+- `BooksSpider` nao aceita mais `robots_checker=` — a verificacao foi movida para o `HTTPClient`
+- `BooksSpider` captura `RobotsDisallowedError` (levantado pelo client) e para o crawl; nao faz mais checagem manual antes do request
+
+`.env.example` — atualizado com todas as variaveis `DATAHUNTER_*` do scraper e do worker
+
+## Auditoria de Segurança — Dia 27
+
+Resultado da auditoria:
+
+- `.env` ignorado no `.gitignore` ✅
+- `.env.example` existe com placeholders; nunca foi commitado `.env` com valores reais ✅
+- `docker-compose.yml` usa `${VAR:-default_dev}` — padrao de dev documentado; nenhuma senha real no repositorio ✅
+- Nenhum token, api_key ou senha hardcoded em codigo Python ✅
+- Auditoria de historico git: nenhum `.env` real em commits anteriores ✅
+
+## Politica de Acesso (detalhada)
+
+- **robots.txt**: `RobotsChecker` cache por dominio; falha silenciosa (permite tudo) em rede ou non-200 — nao interrompe scraping por robots.txt inacessivel
+- **Rate limit**: `requests_per_second: float = 2.0` configuravel via `DATAHUNTER_REQUESTS_PER_SECOND`; padrao conservador de 2 req/s por dominio
+- **User-Agent**: `datahunter/0.1` em todos os requests HTTP (httpx e Playwright); `datahunter` (sem versao) nos checks de robots.txt
+- **Dados pessoais**: `ScrapedBook` armazena apenas titulo, preco, disponibilidade, rating — sem dados de usuario ou navegacao
+- **Secrets**: toda configuracao sensivel (DB URL, webhook, credenciais) via env vars — nunca em codigo ou repositorio
+
+## Decisoes — Dia 27
+
+- `RobotsChecker` movido do spider para o `HTTPClient`: antes era parametro opcional do `BooksSpider`; agora e parametro do cliente — qualquer spider ou script que use o `HTTPClient` e automaticamente coberto sem precisar lembrar de passar o checker; `QuotesSpider` e `AsyncBooksSpider` ganharam protecao de graca
+- Import circular `http_client.py` ↔ `robots.py` resolvido via `TYPE_CHECKING`: `robots.py` importa `HTTPClient` em runtime; `http_client.py` importa `RobotsChecker` SOMENTE durante analise de tipos (mypy) — `from __future__ import annotations` torna todas as anotacoes strings em runtime, entao `RobotsChecker | None` nunca e avaliado
+- `RobotsDisallowedError` como nova excecao (nao `NetworkError`): semanticamente diferente — um URL bloqueado nao e falha de rede; o spider trata cada excecao com comportamento diferente (`NetworkError` registra erro, `RobotsDisallowedError` para silenciosamente)
+- `ScraperSettings` com `env_prefix = "DATAHUNTER_"`: mesma convencao do `WorkerSettings` — todas as configuracoes do projeto usam o mesmo prefixo; um `.env` unico serve para scraper e worker
+- `pydantic-settings` com `field_validator` para restricoes de dominio: `requests_per_second > 0`, `max_retries >= 1`, `log_level` em conjunto valido — falhar na subida e melhor que falhar depois na primeira requisicao com valor invalido
+
+## Dividas Tecnicas (atualizado Dia 27)
+
+- `ExponentialBackoffRetryMiddleware._retry` usa `time.sleep`: bloqueia o reactor — avaliar se escala for necessaria
+- `_wait_for_rate_limit` no `HTTPClient` impoe intervalo minimo (nao janela deslizante): avaliar unificacao no Dia 28+
+- `_wait_for_rate_limit` no `AsyncHTTPClient` nao e concurrency-safe: race condition — adicionar `asyncio.Lock` por dominio
+- `_save_json` duplicada em `books_spider.py`, `async_books_spider.py` e `async_quotes_pw_spider.py`: extrair para `scraper/app/core/utils.py` no Dia 28+
+- `scrape_quotes` nao persiste: aguardando modelo `ScrapedQuote` (Dia 28+)
+- Grafana sem dashboard provisionado: paineis podem ser provisionados via `grafana/dashboards/` (Dia 29+)
+
+## Proximo passo — Dia 28

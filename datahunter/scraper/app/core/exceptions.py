@@ -15,3 +15,7 @@ class ParseError(ScrapingError):
 
 class StorageError(ScrapingError):
     """Database write, read, or migration failure."""
+
+
+class RobotsDisallowedError(ScrapingError):
+    """Target URL is forbidden by the site's robots.txt."""
