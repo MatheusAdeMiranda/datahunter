@@ -2,15 +2,16 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any
-from unittest.mock import AsyncMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import httpx
 import pytest
 import respx
 
 from scraper.app.core.async_http_client import AsyncHTTPClient
-from scraper.app.core.exceptions import NetworkError
+from scraper.app.core.exceptions import NetworkError, RobotsDisallowedError
 from scraper.app.core.http_client import RETRYABLE_STATUS_CODES
+from scraper.app.core.robots import RobotsChecker
 from scraper.app.core.utils import _DEFAULT_HEADERS
 
 URL = "https://example.com/page"
@@ -313,3 +314,41 @@ async def test_no_semaphore_allows_full_concurrency() -> None:
             await asyncio.gather(*[client.get(url) for url in urls])
 
     assert peak_in_flight > 1
+
+
+# ── Robots checker ────────────────────────────────────────────────────────────
+
+
+@respx.mock
+async def test_robots_checker_allows_request_when_permitted() -> None:
+    respx.get(URL).mock(return_value=httpx.Response(200, text="ok"))
+    checker = MagicMock(spec=RobotsChecker)
+    checker.is_allowed.return_value = True
+
+    async with AsyncHTTPClient(robots_checker=checker) as client:
+        response = await client.get(URL)
+
+    assert response.status_code == 200
+    checker.is_allowed.assert_called_once_with(URL)
+
+
+@respx.mock
+async def test_robots_checker_raises_disallowed_error_without_making_request() -> None:
+    checker = MagicMock(spec=RobotsChecker)
+    checker.is_allowed.return_value = False
+
+    with pytest.raises(RobotsDisallowedError):
+        async with AsyncHTTPClient(robots_checker=checker) as client:
+            await client.get(URL)
+
+    assert len(respx.calls) == 0
+
+
+@respx.mock
+async def test_no_robots_check_when_checker_is_none() -> None:
+    respx.get(URL).mock(return_value=httpx.Response(200))
+
+    async with AsyncHTTPClient(robots_checker=None) as client:
+        response = await client.get(URL)
+
+    assert response.status_code == 200

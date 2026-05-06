@@ -4,12 +4,15 @@ import logging
 import time
 import urllib.parse
 from types import TracebackType
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
-from scraper.app.core.exceptions import NetworkError
+from scraper.app.core.exceptions import NetworkError, RobotsDisallowedError
 from scraper.app.core.utils import build_headers
+
+if TYPE_CHECKING:
+    from scraper.app.core.robots import RobotsChecker
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +41,13 @@ class HTTPClient:
         headers: dict[str, str] | None = None,
         requests_per_second: float | None = None,
         backoff_base: float = 0.0,
+        robots_checker: RobotsChecker | None = None,
     ) -> None:
         self._max_attempts = max_attempts
         self._backoff_base = backoff_base
         self._requests_per_second = requests_per_second
         self._last_request_time: dict[str, float] = {}
+        self._robots_checker = robots_checker
         self._client = httpx.Client(
             headers=build_headers(headers),
             timeout=timeout,
@@ -69,6 +74,8 @@ class HTTPClient:
         self._last_request_time[domain] = time.monotonic()
 
     def _fetch(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
+        if self._robots_checker and not self._robots_checker.is_allowed(url):
+            raise RobotsDisallowedError(f"{url} is disallowed by robots.txt")
         last_exc: NetworkError | None = None
         for attempt in range(1, self._max_attempts + 1):
             self._wait_for_rate_limit(url)

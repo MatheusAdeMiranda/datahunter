@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, cast
 
 from scraper.app.core.async_http_client import AsyncHTTPClient
 from scraper.app.core.entities import ScrapedItem, ScrapingJob, ScrapingResult
-from scraper.app.core.exceptions import NetworkError, ParseError
+from scraper.app.core.exceptions import NetworkError, ParseError, RobotsDisallowedError
 from scraper.app.parsers.html_parser import extract_next_page_url, parse_catalog_page
 
 if TYPE_CHECKING:
@@ -69,6 +69,11 @@ class AsyncBooksSpider:
                 try:
                     response = await self._client.get(current_url)
                     html = response.text
+                except RobotsDisallowedError:
+                    msg = f"robots.txt disallows {current_url}, stopping crawl"
+                    logger.warning(msg)
+                    errors.append(msg)
+                    break
                 except NetworkError as exc:
                     msg = f"network error on {current_url}: {exc}"
                     logger.error(msg)
