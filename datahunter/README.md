@@ -1,5 +1,7 @@
 # datahunter
 
+[![CI](https://github.com/MatheusAdeMiranda/datahunter/actions/workflows/ci.yml/badge.svg)](https://github.com/MatheusAdeMiranda/datahunter/actions/workflows/ci.yml)
+
 Sistema profissional de web scraping — construido ao longo de 30 dias de mentoria.
 
 ## Requisitos
