@@ -63,7 +63,9 @@ class BooksSpider:
                 response = self._client.get(current_url)
                 html = response.text
             except RobotsDisallowedError:
-                logger.warning("robots.txt disallows %s, stopping crawl", current_url)
+                msg = f"robots.txt disallows {current_url}, stopping crawl"
+                logger.warning(msg)
+                errors.append(msg)
                 break
             except NetworkError as exc:
                 msg = f"network error on {current_url}: {exc}"

@@ -7,13 +7,16 @@ import time
 import urllib.parse
 from contextlib import AbstractAsyncContextManager
 from types import TracebackType
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
-from scraper.app.core.exceptions import NetworkError
+from scraper.app.core.exceptions import NetworkError, RobotsDisallowedError
 from scraper.app.core.http_client import RETRYABLE_STATUS_CODES
 from scraper.app.core.utils import build_headers
+
+if TYPE_CHECKING:
+    from scraper.app.core.robots import RobotsChecker
 
 logger = logging.getLogger(__name__)
 
@@ -40,11 +43,13 @@ class AsyncHTTPClient:
         requests_per_second: float | None = None,
         backoff_base: float = 0.0,
         semaphore: asyncio.Semaphore | None = None,
+        robots_checker: RobotsChecker | None = None,
     ) -> None:
         self._max_attempts = max_attempts
         self._backoff_base = backoff_base
         self._requests_per_second = requests_per_second
         self._semaphore = semaphore
+        self._robots_checker = robots_checker
         self._last_request_time: dict[str, float] = {}
         self._client = httpx.AsyncClient(
             headers=build_headers(headers),
@@ -71,6 +76,8 @@ class AsyncHTTPClient:
         self._last_request_time[domain] = time.monotonic()
 
     async def _fetch(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
+        if self._robots_checker and not self._robots_checker.is_allowed(url):
+            raise RobotsDisallowedError(f"{url} is disallowed by robots.txt")
         last_exc: NetworkError | None = None
         lock: AbstractAsyncContextManager[Any] = (
             self._semaphore if self._semaphore is not None else contextlib.nullcontext()

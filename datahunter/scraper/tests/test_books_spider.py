@@ -200,7 +200,8 @@ def test_robots_checker_stops_crawl_when_disallowed() -> None:
         result = BooksSpider(client, base_url=PAGE1_URL, output_path=None).crawl()
 
     assert len(result) == 0
-    assert result.errors == []
+    assert len(result.errors) == 1
+    assert "robots.txt" in result.errors[0]
     checker.is_allowed.assert_called_once_with(PAGE1_URL)
 
 

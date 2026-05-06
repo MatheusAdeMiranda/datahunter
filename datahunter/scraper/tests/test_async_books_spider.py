@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
 import respx
 
 from scraper.app.core.async_http_client import AsyncHTTPClient
+from scraper.app.core.robots import RobotsChecker
 from scraper.app.spiders.async_books_spider import AsyncBooksSpider
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -248,3 +249,17 @@ async def test_non_retryable_response_processed_as_html(status_code: int) -> Non
 
     assert result.errors == []
     assert len(result) == 2
+
+
+@respx.mock
+async def test_robots_checker_stops_crawl_and_records_error() -> None:
+    checker = MagicMock(spec=RobotsChecker)
+    checker.is_allowed.return_value = False
+
+    async with AsyncHTTPClient(robots_checker=checker) as client:
+        result = await AsyncBooksSpider(client, base_url=PAGE1_URL, output_path=None).crawl()
+
+    assert len(result) == 0
+    assert len(result.errors) == 1
+    assert "robots.txt" in result.errors[0]
+    checker.is_allowed.assert_called_once_with(PAGE1_URL)
