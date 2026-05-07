@@ -15,8 +15,9 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-# Allow DATABASE_URL env var to override the ini value (production PostgreSQL).
-_db_url = os.environ.get("DATABASE_URL")
+# DATAHUNTER_DATABASE_URL overrides the ini default (SQLite) for PostgreSQL in prod.
+# Falls back to DATABASE_URL for tools that set it directly (e.g. CI runners).
+_db_url = os.environ.get("DATAHUNTER_DATABASE_URL") or os.environ.get("DATABASE_URL")
 if _db_url:
     config.set_main_option("sqlalchemy.url", _db_url)
 

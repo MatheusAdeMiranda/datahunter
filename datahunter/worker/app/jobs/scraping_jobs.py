@@ -101,8 +101,7 @@ def scrape_books(
 def scrape_quotes(self: Any, api_url: str = _QUOTES_API_URL) -> dict[str, Any]:
     """Dispara o QuotesSpider (API JSON) e retorna um resumo do resultado.
 
-    Quotes nao sao persistidas ainda: o modelo ScrapedQuote sera criado no Dia 27+
-    junto com a API REST. Por enquanto apenas o resumo e retornado.
+    Quotes nao sao persistidas (sem modelo de storage para quotes).
     Em caso de NetworkError, ConnectionError ou TimeoutError a task e
     re-enfileirada com backoff exponencial.
     """

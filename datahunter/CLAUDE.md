@@ -111,8 +111,7 @@ Sistema de web scraping profissional para coleta e monitoramento de dados da web
 - `next_url = extract_next_page_url(html, current_url)` extraido ANTES do bloco `try/except ParseError`: preserva a capacidade de seguir para a proxima pagina mesmo quando o parse da atual falha
 
 ## Decisoes Abertas
-- framework de API para gerenciar jobs: a definir na Semana 4
-- upsert dialect-specific (`INSERT ... ON CONFLICT DO UPDATE`) para PostgreSQL: avaliar no Dia 19+ (async)
+- framework de API para gerenciar jobs: nao implementado nos 30 dias; FastAPI e o candidato natural (ver backlog no Dia 30)
 
 ## Dividas Tecnicas
 
@@ -592,4 +591,44 @@ Resultado da auditoria:
 - `scrape_quotes` nao persiste: aguardando modelo `ScrapedQuote` (Dia 28+)
 - Grafana sem dashboard provisionado: paineis podem ser provisionados via `grafana/dashboards/` (Dia 29+)
 
-## Proximo passo — Dia 28
+## Modulos existentes (atualizado Dia 28)
+
+CI/CD adicionado ao `.github/workflows/ci.yml`:
+
+| Job | O que faz |
+|---|---|
+| `lint` | `ruff check` + `ruff format --check` em Python 3.12 |
+| `typecheck` | `mypy scraper/ --strict` em Python 3.12 |
+| `test` | pytest com coverage em matrix 3.11 + 3.12; `fail_under=90` em `[tool.coverage.report]` |
+| `deploy` | Build e push da imagem Docker para GHCR; roda apenas em push para `master` |
+
+Coverage summary publicado em `$GITHUB_STEP_SUMMARY` com `coverage report --format=markdown`.
+
+## Decisoes — Dia 28
+
+- `fail_under = 90` em `[tool.coverage.report]` no `pyproject.toml`: a regra vive no arquivo de configuracao — CI e dev local compartilham o mesmo threshold sem duplicar flags no workflow YAML
+- Deploy condicional com `if: github.ref == 'refs/heads/master' && github.event_name == 'push'`: imagens so sao publicadas em push para master (nao em PRs de forks) — evita tentar fazer push sem `GITHUB_TOKEN` com permissao de escrita
+- `permissions: packages: write` no job `deploy`: o `GITHUB_TOKEN` automatico do Actions nao tem permissao de escrita em packages por padrao — declarar explicitamente evita a necessidade de secret manual
+- Imagem nomeada como `ghcr.io/<owner-lowercase>/<repo>`: GHCR exige nome em lowercase; `${{ github.repository }}` pode ter maiusculas — `toLowerCase()` no YAML e obrigatorio
+- `$GITHUB_STEP_SUMMARY` com markdown: zero permissoes extras, funciona em forks, aparece direto na pagina do workflow — melhor que Codecov para projeto publico sem budget
+
+## Modulos existentes (atualizado Dia 29)
+
+Validacao final: README reescrito, alembic env corrigido, CLAUDE.md atualizado.
+
+## Decisoes — Dia 29
+
+- `DATAHUNTER_DATABASE_URL` tem prioridade sobre `DATABASE_URL` em `alembic/env.py`: o projeto usa o prefixo `DATAHUNTER_` em todos os lugares; `DATABASE_URL` e mantido como fallback para ferramentas que o setam automaticamente (ex.: Heroku, Railway)
+- `docker-compose.override.yml` documentado no README: era invisivel para devs novos — o arquivo e carregado automaticamente pelo Compose e altera comportamento silenciosamente (pool=solo, volumes de hot reload); e importante que o dev saiba que existe
+- `playwright install chromium` adicionado ao README de dev local: sem isso, qualquer spider de browser falha com erro opaco de binario nao encontrado
+- Comentario sobre `ScrapedQuote` removido de `scraping_jobs.py`: era prospectivo e referenciava um dia especifico que ja passou; quotes continuam sem persistencia e isso e a realidade do projeto — documentar um gap e melhor que ter um comentario desatualizado
+
+## Dividas Tecnicas (final — Dia 29)
+
+- `ExponentialBackoffRetryMiddleware._retry` usa `time.sleep`: bloqueia o reactor Twisted em crawls com alta concorrencia; fix usa `reactor.callLater` + Deferred (Twisted-idiomatic) — prioridade baixa para o volume atual
+- `_wait_for_rate_limit` no `HTTPClient` impoe intervalo minimo entre requests (nao janela deslizante como `@rate_limit`): comportamento correto para scraper, semantica diferente do decorator — documentar ou unificar
+- `_wait_for_rate_limit` no `AsyncHTTPClient` nao e concurrency-safe: race condition entre check e update de `_last_request_time` quando multiplas coroutines compartilham o mesmo cliente — adicionar `asyncio.Lock` por dominio
+- `_save_json` duplicada em `books_spider.py`, `async_books_spider.py` e `async_quotes_pw_spider.py`: extrair para `scraper/app/core/utils.py`
+- Prometheus nao coleta metricas de tasks em producao com `--concurrency > 1`: `start_http_server` roda no processo principal; as tasks executam em processos filho com copias separadas dos contadores — os processos filho nunca atualizam os contadores do processo pai; fix: usar `multiprocessing_registry` do prometheus_client ou expor metricas via Redis/banco
+- `scrape_quotes` nao persiste resultados: sem modelo `ScrapedQuote` no banco; dados de quotes existem apenas no resultado JSON da task Celery
+- Grafana sem dashboard provisionado: apenas datasource configurado; criar `grafana/dashboards/datahunter.json` com paineis de `pages_scraped_total`, `scraping_errors_total` e `scraping_duration_seconds`
