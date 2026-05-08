@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from pathlib import Path
 
 from scraper.app.browsers.async_playwright_client import AsyncPlaywrightClient
 from scraper.app.browsers.quotes_pw_spider import SEL_QUOTE, _extract_quotes
 from scraper.app.core.entities import ScrapedItem, ScrapingJob, ScrapingResult
+from scraper.app.core.utils import save_result_json
 
 logger = logging.getLogger(__name__)
 
@@ -71,19 +71,9 @@ class AsyncQuotesPWSpider:
         result = ScrapingResult(job=job, items=all_items, errors=all_errors)
 
         if self._output_path is not None:
-            _save_json(result, self._output_path)
+            save_result_json(result, self._output_path)
 
         return result
-
-
-def _save_json(result: ScrapingResult, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    payload = [
-        {"url": item.url, "data": item.data, "scraped_at": item.scraped_at.isoformat()}
-        for item in result.items
-    ]
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-    logger.info("saved %d items to %s", len(payload), path)
 
 
 if __name__ == "__main__":  # pragma: no cover

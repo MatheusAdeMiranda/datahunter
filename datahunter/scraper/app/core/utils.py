@@ -1,9 +1,17 @@
 from __future__ import annotations
 
+import json
+import logging
 import re
 from collections.abc import Callable, Generator, Iterable
+from pathlib import Path
 from types import MappingProxyType
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from scraper.app.core.entities import ScrapingResult
+
+logger = logging.getLogger(__name__)
 
 # Single source of truth for the bot's identity.
 # HTTP requests use the full "name/version" string (standard User-Agent format).
@@ -97,3 +105,17 @@ def chunk_urls(urls: list[str], size: int) -> Generator[list[str], None, None]:
 def _parse_links(html: str) -> list[str]:
     """Extract href values from a raw HTML snippet (naive regex, for demos)."""
     return cast(list[str], re.findall(r'href="([^"]+)"', html))
+
+
+# ── I/O helpers ───────────────────────────────────────────────────────────────
+
+
+def save_result_json(result: ScrapingResult, path: Path) -> None:
+    """Serialize a ScrapingResult to a JSON file, creating parent dirs as needed."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = [
+        {"url": item.url, "data": item.data, "scraped_at": item.scraped_at.isoformat()}
+        for item in result.items
+    ]
+    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    logger.info("saved %d items to %s", len(payload), path)

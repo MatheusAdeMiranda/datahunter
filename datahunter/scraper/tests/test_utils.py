@@ -1,7 +1,10 @@
+import json
 import sys
+from pathlib import Path
 
 import pytest
 
+from scraper.app.core.entities import ScrapedItem, ScrapingJob, ScrapingResult
 from scraper.app.core.utils import (
     _DEFAULT_HEADERS,
     build_headers,
@@ -11,6 +14,7 @@ from scraper.app.core.utils import (
     make_request_counter,
     make_url_normalizer,
     merge_settings,
+    save_result_json,
 )
 
 _PAGES = [
@@ -154,3 +158,47 @@ class TestChunkUrls:
 
     def test_empty_list_produces_no_batches(self) -> None:
         assert list(chunk_urls([], 5)) == []
+
+
+# ── save_result_json ──────────────────────────────────────────────────────────
+
+
+class TestSaveResultJson:
+    def _make_result(self) -> ScrapingResult:
+        job = ScrapingJob(url="https://example.com", max_pages=1)
+        items = [ScrapedItem(url="https://example.com", data={"title": "Book A", "price": "9.99"})]
+        return ScrapingResult(job=job, items=items, errors=[])
+
+    def test_creates_output_file(self, tmp_path: Path) -> None:
+        result = self._make_result()
+        out = tmp_path / "output" / "items.json"
+        save_result_json(result, out)
+        assert out.exists()
+
+    def test_json_contains_all_items(self, tmp_path: Path) -> None:
+        result = self._make_result()
+        out = tmp_path / "items.json"
+        save_result_json(result, out)
+        payload = json.loads(out.read_text(encoding="utf-8"))
+        assert len(payload) == 1
+        assert payload[0]["data"]["title"] == "Book A"
+
+    def test_json_includes_scraped_at_isoformat(self, tmp_path: Path) -> None:
+        result = self._make_result()
+        out = tmp_path / "items.json"
+        save_result_json(result, out)
+        payload = json.loads(out.read_text(encoding="utf-8"))
+        assert "T" in payload[0]["scraped_at"]  # ISO 8601 datetime
+
+    def test_creates_parent_dirs(self, tmp_path: Path) -> None:
+        result = self._make_result()
+        out = tmp_path / "a" / "b" / "c" / "items.json"
+        save_result_json(result, out)
+        assert out.exists()
+
+    def test_empty_result_writes_empty_list(self, tmp_path: Path) -> None:
+        job = ScrapingJob(url="https://example.com", max_pages=1)
+        result = ScrapingResult(job=job, items=[], errors=[])
+        out = tmp_path / "items.json"
+        save_result_json(result, out)
+        assert json.loads(out.read_text(encoding="utf-8")) == []
