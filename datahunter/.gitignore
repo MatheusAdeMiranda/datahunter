@@ -44,6 +44,7 @@ output/
 *.json
 !*.example.json
 !scraper/tests/fixtures/*.json
+!grafana/dashboards/*.json
 
 # Docker
 .docker/
