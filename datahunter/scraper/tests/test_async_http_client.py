@@ -270,6 +270,37 @@ async def test_no_rate_limit_when_requests_per_second_is_none() -> None:
     mock_sleep.assert_not_called()
 
 
+@respx.mock
+async def test_rate_limit_is_concurrency_safe() -> None:
+    """Concurrent coroutines sharing one client must not violate the rate limit."""
+    domain = "https://example.com"
+    for i in range(4):
+        respx.get(f"{domain}/{i}").mock(return_value=httpx.Response(200))
+
+    request_times: list[float] = []
+    clock = 0.0
+
+    async def fake_sleep(seconds: float) -> None:
+        nonlocal clock
+        clock += seconds
+
+    def fake_monotonic() -> float:
+        return clock
+
+    with (
+        patch("scraper.app.core.async_http_client.asyncio.sleep", side_effect=fake_sleep),
+        patch("scraper.app.core.async_http_client.time.monotonic", side_effect=fake_monotonic),
+    ):
+        async with AsyncHTTPClient(requests_per_second=1.0) as client:
+            for i in range(4):
+                await client.get(f"{domain}/{i}")
+                request_times.append(clock)
+
+    # Each request after the first must be at least 1 s apart (period = 1.0 s).
+    for prev, curr in zip(request_times, request_times[1:], strict=False):
+        assert curr - prev >= 1.0
+
+
 # ── Semaphore ─────────────────────────────────────────────────────────────────
 
 

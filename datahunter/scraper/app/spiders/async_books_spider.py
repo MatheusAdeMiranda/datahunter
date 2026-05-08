@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
@@ -9,6 +8,7 @@ from typing import TYPE_CHECKING, cast
 from scraper.app.core.async_http_client import AsyncHTTPClient
 from scraper.app.core.entities import ScrapedItem, ScrapingJob, ScrapingResult
 from scraper.app.core.exceptions import NetworkError, ParseError, RobotsDisallowedError
+from scraper.app.core.utils import save_result_json
 from scraper.app.parsers.html_parser import extract_next_page_url, parse_catalog_page
 
 if TYPE_CHECKING:
@@ -115,19 +115,9 @@ class AsyncBooksSpider:
         result = ScrapingResult(job=job, items=items, errors=errors)
 
         if self._output_path is not None:
-            _save_json(result, self._output_path)
+            save_result_json(result, self._output_path)
 
         return result
-
-
-def _save_json(result: ScrapingResult, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    payload = [
-        {"url": item.url, "data": item.data, "scraped_at": item.scraped_at.isoformat()}
-        for item in result.items
-    ]
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-    logger.info("saved %d items to %s", len(payload), path)
 
 
 if __name__ == "__main__":  # pragma: no cover

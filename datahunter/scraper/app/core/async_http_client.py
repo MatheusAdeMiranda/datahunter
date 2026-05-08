@@ -27,11 +27,8 @@ class AsyncHTTPClient:
     Drop-in async equivalent of HTTPClient. Use as an async context manager.
     Pass an asyncio.Semaphore to cap how many requests run concurrently.
     Exponential backoff between retries: sleep backoff_base * 2^(attempt-1) s.
-
-    Note: per-domain rate limiting is not concurrency-safe. When multiple
-    coroutines share one client, the sliding window may be violated between
-    the check and the update across an await point. Fix in Dia 19+ with an
-    asyncio.Lock per domain.
+    Per-domain rate limiting is enforced with an asyncio.Lock per domain to
+    prevent race conditions when multiple coroutines share one client.
     """
 
     def __init__(
@@ -51,6 +48,7 @@ class AsyncHTTPClient:
         self._semaphore = semaphore
         self._robots_checker = robots_checker
         self._last_request_time: dict[str, float] = {}
+        self._rate_limit_locks: dict[str, asyncio.Lock] = {}
         self._client = httpx.AsyncClient(
             headers=build_headers(headers),
             timeout=timeout,
@@ -67,13 +65,16 @@ class AsyncHTTPClient:
         if self._requests_per_second is None:
             return
         domain = urllib.parse.urlparse(url).netloc
+        if domain not in self._rate_limit_locks:
+            self._rate_limit_locks[domain] = asyncio.Lock()
         period = 1.0 / self._requests_per_second
-        last = self._last_request_time.get(domain)
-        if last is not None:
-            elapsed = time.monotonic() - last
-            if elapsed < period:
-                await asyncio.sleep(period - elapsed)
-        self._last_request_time[domain] = time.monotonic()
+        async with self._rate_limit_locks[domain]:
+            last = self._last_request_time.get(domain)
+            if last is not None:
+                elapsed = time.monotonic() - last
+                if elapsed < period:
+                    await asyncio.sleep(period - elapsed)
+            self._last_request_time[domain] = time.monotonic()
 
     async def _fetch(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
         if self._robots_checker and not self._robots_checker.is_allowed(url):
