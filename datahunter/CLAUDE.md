@@ -623,12 +623,32 @@ Validacao final: README reescrito, alembic env corrigido, CLAUDE.md atualizado.
 - `playwright install chromium` adicionado ao README de dev local: sem isso, qualquer spider de browser falha com erro opaco de binario nao encontrado
 - Comentario sobre `ScrapedQuote` removido de `scraping_jobs.py`: era prospectivo e referenciava um dia especifico que ja passou; quotes continuam sem persistencia e isso e a realidade do projeto — documentar um gap e melhor que ter um comentario desatualizado
 
-## Dividas Tecnicas (final — Dia 29)
+## Modulos existentes (atualizado Dia 30)
+
+`api/app/` — FastAPI job management API:
+
+| Arquivo | O que tem |
+|---|---|
+| `main.py` | `FastAPI` app, inclui jobs router, expoe `GET /health` |
+| `schemas.py` | `DispatchResponse` (task_id + status), `JobStatusResponse` (task_id + status + result + error) |
+| `jobs.py` | `POST /jobs/scrape/books`, `POST /jobs/scrape/quotes` — despacham via `celery_app.send_task(nome)`; `GET /jobs/{task_id}` — consulta `AsyncResult` e retorna estado e resultado |
+
+## Decisoes — Dia 30
+
+- `celery_app.send_task("nome.da.task")` em vez de `scrape_books.delay()` na API: evita importar o modulo de worker (SQLAlchemy, structlog) no processo da API — o processo so precisa saber o nome da task e o endereco do broker; mais resiliente a mudancas no modulo de tasks
+- `save_result_json()` extraida para `scraper/app/core/utils.py`: era `_save_json` duplicada identicamente em `books_spider.py`, `async_books_spider.py` e `async_quotes_pw_spider.py` desde o Dia 19 — fonte unica de verdade; 5 testes cobrem criacao de arquivo, conteudo, isoformat, dirs aninhados e resultado vazio
+- `asyncio.Lock` por dominio em `AsyncHTTPClient._wait_for_rate_limit`: race condition entre check e update de `_last_request_time` com `await` no meio; lock por dominio garante que so uma coroutine segura a janela por vez; lock criado lazily no primeiro request ao dominio (sem await entre check e criacao — seguro em asyncio single-thread)
+- `api/` excluida do mypy --strict: celery nao tem stubs tipados (`py.typed` ausente); mesma politica de `worker/` — nao force strict onde as dependencias nao cooperam
+
+## Decisoes Abertas (final — Dia 30)
+
+- Framework de API para gerenciar jobs: **implementado** (FastAPI, Dia 30)
+- Grafana dashboard provisionado: pendente — `grafana/dashboards/datahunter.json` com paineis de `pages_scraped_total`, `scraping_errors_total` e `scraping_duration_seconds`
+
+## Dividas Tecnicas (final — Dia 30)
 
 - `ExponentialBackoffRetryMiddleware._retry` usa `time.sleep`: bloqueia o reactor Twisted em crawls com alta concorrencia; fix usa `reactor.callLater` + Deferred (Twisted-idiomatic) — prioridade baixa para o volume atual
-- `_wait_for_rate_limit` no `HTTPClient` impoe intervalo minimo entre requests (nao janela deslizante como `@rate_limit`): comportamento correto para scraper, semantica diferente do decorator — documentar ou unificar
-- `_wait_for_rate_limit` no `AsyncHTTPClient` nao e concurrency-safe: race condition entre check e update de `_last_request_time` quando multiplas coroutines compartilham o mesmo cliente — adicionar `asyncio.Lock` por dominio
-- `_save_json` duplicada em `books_spider.py`, `async_books_spider.py` e `async_quotes_pw_spider.py`: extrair para `scraper/app/core/utils.py`
-- Prometheus nao coleta metricas de tasks em producao com `--concurrency > 1`: `start_http_server` roda no processo principal; as tasks executam em processos filho com copias separadas dos contadores — os processos filho nunca atualizam os contadores do processo pai; fix: usar `multiprocessing_registry` do prometheus_client ou expor metricas via Redis/banco
+- `_wait_for_rate_limit` no `HTTPClient` impoe intervalo minimo entre requests (nao janela deslizante como `@rate_limit`): comportamento correto para scraper, semantica diferente do decorator — ~~adicionar asyncio.Lock~~ (resolvido no Dia 30 para AsyncHTTPClient); HTTPClient sincrono nao tem race condition (thread GIL protege)
+- Prometheus nao coleta metricas de tasks em producao com `--concurrency > 1`: `start_http_server` roda no processo principal; tasks executam em processos filho — fix: `multiprocessing_registry` do prometheus_client
 - `scrape_quotes` nao persiste resultados: sem modelo `ScrapedQuote` no banco; dados de quotes existem apenas no resultado JSON da task Celery
-- Grafana sem dashboard provisionado: apenas datasource configurado; criar `grafana/dashboards/datahunter.json` com paineis de `pages_scraped_total`, `scraping_errors_total` e `scraping_duration_seconds`
+- Grafana sem dashboard provisionado: apenas datasource configurado — ver Decisoes Abertas acima
