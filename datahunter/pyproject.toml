@@ -20,6 +20,8 @@ dependencies = [
     "redis>=5.0",
     "flower>=2.0",
     "prometheus-client>=0.20",
+    "fastapi>=0.136.1",
+    "uvicorn[standard]>=0.30",
 ]
 
 [project.optional-dependencies]
@@ -61,11 +63,11 @@ strict = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["scraper/tests", "worker/tests"]
+testpaths = ["scraper/tests", "worker/tests", "api/tests"]
 pythonpath = ["."]
 
 [tool.coverage.run]
-source = ["scraper", "worker"]
+source = ["scraper", "worker", "api"]
 omit = ["*/tests/*", "*/benchmarks/*", "*/scrapy_project/settings.py"]
 concurrency = ["thread", "greenlet"]
 
