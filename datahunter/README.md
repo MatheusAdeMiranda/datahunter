@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/MatheusAdeMiranda/datahunter/actions/workflows/ci.yml/badge.svg)](https://github.com/MatheusAdeMiranda/datahunter/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Tests](https://img.shields.io/badge/testes-439%20%7C%20100%25%20coverage-brightgreen)](#qualidade-de-codigo)
 [![mypy](https://img.shields.io/badge/mypy-strict-blue)](https://mypy-lang.org/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
