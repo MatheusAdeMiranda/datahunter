@@ -23,7 +23,8 @@ O projeto foi desenvolvido em 30 dias como exercicio deliberado de engenharia: c
 | **Arquitetura distribuida** | Celery tasks com retry exponencial e jitter, Beat scheduler, Redis broker, Flower monitoring |
 | **Observabilidade** | structlog JSON com bridge stdlib, Prometheus metrics (Counter, Histogram), Grafana dashboards, webhook alerts |
 | **CI/CD** | GitHub Actions matrix (3.11+3.12), coverage floor 90%, deploy condicional no GHCR |
-| **Qualidade** | 439 testes, 100% coverage, mypy --strict, ruff check + ruff format |
+| **API REST** | FastAPI + uvicorn: `POST /jobs/scrape/{books,quotes}` despacha tasks Celery; `GET /jobs/{task_id}` retorna estado e resultado |
+| **Qualidade** | 457 testes, 100% coverage, mypy --strict, ruff check + ruff format |
 
 ---
 
@@ -31,7 +32,8 @@ O projeto foi desenvolvido em 30 dias como exercicio deliberado de engenharia: c
 
 ```mermaid
 graph TD
-    Beat["Celery Beat\nagendador"] -->|dispara tasks| Queue[("Redis\nbroker + cache")]
+    API["FastAPI\n:8000"] -->|send_task| Queue[("Redis\nbroker + cache")]
+    Beat["Celery Beat\nagendador"] -->|dispara tasks| Queue
     Queue --> Worker["Celery Worker\nexecuta scraping"]
 
     Worker --> BS["BooksSpider\nhttpx + BS4"]
@@ -53,7 +55,7 @@ graph TD
     classDef spider fill:#e76f51,color:#fff,stroke:#c1440e
     classDef monitor fill:#457b9d,color:#fff,stroke:#2c5f7d
 
-    class Worker,Beat service
+    class Worker,Beat,API service
     class Queue,DB storage
     class BS,QS,PW,SC spider
     class M,Prom,Graf,Flower monitor
@@ -86,6 +88,7 @@ Apos subir, verifique os servicos nas portas abaixo.
 
 | Servico    | URL                        | Descricao                                     |
 |------------|----------------------------|-----------------------------------------------|
+| API        | http://localhost:8000       | Job management REST API (docs: /docs)          |
 | Flower     | http://localhost:5555       | Monitoramento de tasks Celery em tempo real    |
 | Grafana    | http://localhost:3000       | Dashboards de metricas (admin / datahunter)    |
 | Prometheus | http://localhost:9090       | Coleta de metricas do worker                  |
@@ -100,11 +103,15 @@ Apos subir, verifique os servicos nas portas abaixo.
 # 1. Todos os containers devem estar healthy/running
 docker compose ps
 
-# 2. Disparar um job de scraping manualmente
-docker compose exec worker celery -A worker.app.main call worker.app.jobs.scraping_jobs.scrape_books
+# 2. Disparar um job via API
+curl -s -X POST http://localhost:8000/jobs/scrape/books | python -m json.tool
+# {"task_id": "...", "status": "queued"}
 
-# 3. Acompanhar o resultado no Flower
-#    Abra http://localhost:5555 → Tasks
+# 3. Consultar o status do job
+curl -s http://localhost:8000/jobs/<task_id> | python -m json.tool
+
+# 4. Acompanhar no Flower ou via Swagger UI
+#    Abra http://localhost:5555 ou http://localhost:8000/docs
 ```
 
 O Beat agenda `scrape_books` e `scrape_quotes` automaticamente no intervalo definido em
